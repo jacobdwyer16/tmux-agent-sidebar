@@ -1,8 +1,44 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
+#[cfg(windows)]
+use windows_sys::Win32::{
+    Foundation::{CloseHandle, ERROR_NO_MORE_FILES, GetLastError, INVALID_HANDLE_VALUE},
+    System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
+        TH32CS_SNAPPROCESS,
+    },
+};
 
 use crate::tmux::AgentType;
+
+pub(crate) const CODEX_HOST: &str = "codex-code-mode-host";
+
+#[cfg(windows)]
+fn windows_command_lines() -> HashMap<u32, String> {
+    let output = Command::new("powershell.exe")
+        .creation_flags(0x08000000)
+        .args(["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference = 'Stop'; [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); Get-CimInstance Win32_Process | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"])
+        .output().expect("cannot query Windows process command lines");
+    assert!(
+        output.status.success(),
+        "Windows process command query failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let rows: Vec<serde_json::Value> =
+        serde_json::from_slice(&output.stdout).expect("invalid Windows process command data");
+    let commands: HashMap<u32, String> = rows
+        .into_iter()
+        .filter_map(|row| {
+            let pid = row.get("ProcessId")?.as_u64()? as u32;
+            let command = row.get("CommandLine")?.as_str()?;
+            Some((pid, command.to_string()))
+        })
+        .collect();
+    commands
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct ProcessInfo {
@@ -17,6 +53,7 @@ pub(crate) struct ProcessSnapshot {
 }
 
 impl ProcessSnapshot {
+    #[cfg(not(windows))]
     pub(crate) fn scan() -> Option<Self> {
         let output = Command::new("ps")
             .args(["-eo", "pid=,ppid=,comm=,args="])
@@ -30,6 +67,56 @@ impl ProcessSnapshot {
         )))
     }
 
+    #[cfg(windows)]
+    pub(crate) fn scan() -> Option<Self> {
+        let command_lines = windows_command_lines();
+        let mut children_of: HashMap<u32, Vec<u32>> = HashMap::new();
+        let mut info_by_pid = HashMap::new();
+        unsafe {
+            let handle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            assert_ne!(
+                handle,
+                INVALID_HANDLE_VALUE,
+                "process snapshot failed: {}",
+                GetLastError()
+            );
+            let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+            entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+            let mut found = Process32FirstW(handle, &mut entry);
+            while found != 0 {
+                let length = entry
+                    .szExeFile
+                    .iter()
+                    .position(|c| *c == 0)
+                    .unwrap_or(entry.szExeFile.len());
+                let comm = String::from_utf16_lossy(&entry.szExeFile[..length]);
+                children_of
+                    .entry(entry.th32ParentProcessID)
+                    .or_default()
+                    .push(entry.th32ProcessID);
+                info_by_pid.insert(
+                    entry.th32ProcessID,
+                    ProcessInfo {
+                        args: command_lines
+                            .get(&entry.th32ProcessID)
+                            .cloned()
+                            .unwrap_or_else(|| comm.clone()),
+                        comm,
+                    },
+                );
+                found = Process32NextW(handle, &mut entry);
+            }
+            let error = GetLastError();
+            CloseHandle(handle);
+            assert_eq!(error, ERROR_NO_MORE_FILES, "process enumeration failed");
+        }
+        Some(Self {
+            children_of,
+            info_by_pid,
+        })
+    }
+
+    #[cfg(any(not(windows), test))]
     pub(crate) fn from_ps_output(ps_output: &str) -> Self {
         let mut children_of: HashMap<u32, Vec<u32>> = HashMap::new();
         let mut info_by_pid: HashMap<u32, ProcessInfo> = HashMap::new();
@@ -98,6 +185,41 @@ impl ProcessSnapshot {
         })
     }
 
+    pub(crate) fn tree_has_codex_host(&self, pid: u32) -> bool {
+        self.descendants(&[pid]).into_iter().any(|pid| {
+            self.info_by_pid
+                .get(&pid)
+                .is_some_and(|info| command_basename(&info.comm) == CODEX_HOST)
+        })
+    }
+
+    pub(crate) fn agent_for_tree(&self, pid: u32) -> Option<AgentType> {
+        let mut pending = VecDeque::from([pid]);
+        let mut seen = HashSet::new();
+        while let Some(pid) = pending.pop_front() {
+            if !seen.insert(pid) {
+                continue;
+            }
+            if let Some(info) = self.info_by_pid.get(&pid) {
+                for agent in [
+                    AgentType::Claude,
+                    AgentType::Codex,
+                    AgentType::Pi,
+                    AgentType::Antigravity,
+                    AgentType::OpenCode,
+                ] {
+                    if process_matches_agent(info, agent.as_str()) {
+                        return Some(agent);
+                    }
+                }
+            }
+            if let Some(children) = self.children_of.get(&pid) {
+                pending.extend(children);
+            }
+        }
+        None
+    }
+
     pub(crate) fn command_lines_for_tree(&self, seed_pids: &[u32]) -> Vec<String> {
         self.descendants(seed_pids)
             .into_iter()
@@ -114,14 +236,30 @@ impl ProcessSnapshot {
 }
 
 pub(crate) fn command_basename(command: &str) -> &str {
-    Path::new(command)
+    let name = Path::new(command)
         .file_name()
         .and_then(|name| name.to_str())
-        .unwrap_or(command)
+        .unwrap_or(command);
+    name.strip_suffix(".exe.old")
+        .or_else(|| name.strip_suffix(".exe"))
+        .unwrap_or(name)
 }
 
 pub(crate) fn process_matches_agent(info: &ProcessInfo, agent_name: &str) -> bool {
-    if command_basename(&info.comm) == agent_name {
+    let command = command_basename(&info.comm);
+    if (agent_name == "antigravity" && command == "agy")
+        || (agent_name == "pi"
+            && command == "node"
+            && info
+                .args
+                .replace('\\', "/")
+                .contains("pi-coding-agent/dist/"))
+    {
+        return true;
+    }
+    if command_basename(&info.comm) == agent_name
+        || (agent_name == "codex" && command_basename(&info.comm) == CODEX_HOST)
+    {
         return true;
     }
 
@@ -134,6 +272,27 @@ pub(crate) fn process_matches_agent(info: &ProcessInfo, agent_name: &str) -> boo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pi_and_antigravity_are_recognized_without_mistaking_nested_agents_for_the_parent() {
+        let snapshot = ProcessSnapshot::from_ps_output(
+            "100 1 powershell.exe powershell.exe\n101 100 node.exe node.exe C:/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js\n102 101 agy.exe agy.exe\n",
+        );
+        assert_eq!(snapshot.agent_for_tree(100), Some(AgentType::Pi));
+        assert!(snapshot.tree_has_agent(&[102], &AgentType::Antigravity));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_snapshot_contains_current_process_and_command_line() {
+        let snapshot = ProcessSnapshot::scan().expect("Windows process snapshot missing");
+        let process = snapshot
+            .info_by_pid
+            .get(&std::process::id())
+            .expect("current process missing");
+        assert!(process.args.contains("tmux_agent_sidebar"));
+        assert!(process.args.len() > process.comm.len());
+    }
 
     #[test]
     fn descendants_walks_process_tree() {

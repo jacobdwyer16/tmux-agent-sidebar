@@ -37,7 +37,10 @@ impl ActivityEntry {
 }
 
 pub fn log_file_path(pane_id: &str) -> PathBuf {
-    let encoded = pane_id.replace('%', "_");
+    let encoded = pane_id.replace(['%', ':', '/', '\\'], "_");
+    #[cfg(windows)]
+    return std::env::temp_dir().join(format!("tmux-agent-activity{encoded}.log"));
+    #[cfg(not(windows))]
     PathBuf::from(format!("/tmp/tmux-agent-activity{encoded}.log"))
 }
 
@@ -48,10 +51,10 @@ pub fn log_file_path(pane_id: &str) -> PathBuf {
 /// (`hook.rs` rewrites it when the line count exceeds 210), both of
 /// which bump the mtime, so refresh paths can use this as a cheap
 /// "anything to re-parse?" check before reading the file.
-pub fn log_mtime(pane_id: &str) -> Option<std::time::SystemTime> {
+pub fn log_mtime(pane_id: &str) -> Option<(std::time::SystemTime, u64)> {
     fs::metadata(log_file_path(pane_id))
         .ok()
-        .and_then(|m| m.modified().ok())
+        .and_then(|m| m.modified().ok().map(|time| (time, m.len())))
 }
 
 fn parse_entry(line: &str) -> Option<ActivityEntry> {
@@ -318,7 +321,10 @@ mod tests {
     #[test]
     fn test_log_file_path() {
         let path = log_file_path("%5");
+        #[cfg(not(windows))]
         assert_eq!(path.to_str().unwrap(), "/tmp/tmux-agent-activity_5.log");
+        #[cfg(windows)]
+        assert_eq!(path, std::env::temp_dir().join("tmux-agent-activity_5.log"));
     }
 
     #[test]

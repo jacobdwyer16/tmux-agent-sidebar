@@ -1,6 +1,8 @@
 pub const CLAUDE_AGENT: &str = "claude";
 pub const CODEX_AGENT: &str = "codex";
 pub const OPENCODE_AGENT: &str = "opencode";
+pub const PI_AGENT: &str = "pi";
+pub const ANTIGRAVITY_AGENT: &str = "antigravity";
 
 #[derive(Debug, Clone)]
 pub struct PaneInfo {
@@ -21,6 +23,7 @@ pub struct PaneInfo {
     pub worktree: WorktreeMetadata,
     pub session_id: Option<String>,
     pub session_name: String,
+    pub model: String,
     /// `true` when the window this pane lives in was created by the
     /// sidebar's spawn flow (via the `@agent-sidebar-spawned` window
     /// option). Used by the row renderer to show a clickable red `×`
@@ -92,6 +95,8 @@ pub enum AgentType {
     Claude,
     Codex,
     OpenCode,
+    Pi,
+    Antigravity,
     #[allow(dead_code)]
     Unknown,
 }
@@ -119,6 +124,8 @@ impl AgentType {
             CLAUDE_AGENT => Some(Self::Claude),
             CODEX_AGENT => Some(Self::Codex),
             OPENCODE_AGENT => Some(Self::OpenCode),
+            PI_AGENT => Some(Self::Pi),
+            ANTIGRAVITY_AGENT => Some(Self::Antigravity),
             _ => None,
         }
     }
@@ -128,6 +135,8 @@ impl AgentType {
             Self::Claude => CLAUDE_AGENT,
             Self::Codex => CODEX_AGENT,
             Self::OpenCode => OPENCODE_AGENT,
+            Self::Pi => PI_AGENT,
+            Self::Antigravity => ANTIGRAVITY_AGENT,
             Self::Unknown => "unknown",
         }
     }

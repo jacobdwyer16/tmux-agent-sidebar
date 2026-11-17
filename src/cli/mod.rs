@@ -2,12 +2,13 @@ pub mod capture;
 mod hook;
 mod label;
 pub mod plugin_state;
+mod report;
 pub(crate) mod setup;
 pub(crate) mod shared_html;
 mod spawn;
 pub(crate) mod toggle;
 
-use std::io::Read;
+use std::io::{IsTerminal, Read};
 
 use crate::tmux;
 
@@ -18,6 +19,7 @@ pub fn run(args: &[String]) -> Option<i32> {
     let rest = &args[1..];
     let code = match cmd {
         "setup" => setup::cmd_setup(rest),
+        "report" => report::cmd_report(rest),
         "hook" => hook::cmd_hook(rest),
         "toggle" => toggle::cmd_toggle(rest),
         "toggle-all" => toggle::cmd_toggle_all(rest),
@@ -37,7 +39,7 @@ pub fn run(args: &[String]) -> Option<i32> {
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
 fn read_stdin_json() -> serde_json::Value {
-    let is_tty = unsafe { libc::isatty(libc::STDIN_FILENO) != 0 };
+    let is_tty = std::io::stdin().is_terminal();
     if is_tty {
         return serde_json::Value::Null;
     }
@@ -47,14 +49,17 @@ fn read_stdin_json() -> serde_json::Value {
 }
 
 fn tmux_pane() -> String {
-    std::env::var("TMUX_PANE").unwrap_or_default()
+    tmux::current_pane_target()
 }
 
 fn local_time_hhmm() -> String {
     unsafe {
         let now = libc::time(std::ptr::null_mut());
         let mut tm: libc::tm = std::mem::zeroed();
+        #[cfg(unix)]
         libc::localtime_r(&now, &mut tm);
+        #[cfg(windows)]
+        assert_eq!(libc::localtime_s(&mut tm, &now), 0);
         format!("{:02}:{:02}", tm.tm_hour, tm.tm_min)
     }
 }

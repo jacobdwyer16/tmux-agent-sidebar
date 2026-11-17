@@ -43,7 +43,7 @@ pub(crate) fn spawn_with<E: SpawnEnv>(env: &E, req: &SpawnRequest) -> Result<Str
     if worktree_dir.as_deref().is_some_and(|dir| {
         let dir = Path::new(dir);
         !dir.as_os_str().is_empty()
-            && (dir.is_absolute() || dir.components().any(|c| c == Component::ParentDir))
+            && (dir.has_root() || dir.components().any(|c| c == Component::ParentDir))
     }) {
         return Err("worktree directory must be repo-relative".into());
     }
@@ -322,7 +322,9 @@ mod env_tests {
     }
 
     fn has_call(calls: &[String], prefix: &str) -> bool {
-        calls.iter().any(|c| c.starts_with(prefix))
+        calls
+            .iter()
+            .any(|c| c.replace('\\', "/").starts_with(prefix))
     }
 
     #[test]

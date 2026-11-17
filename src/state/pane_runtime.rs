@@ -20,7 +20,7 @@ pub struct PaneRuntimeState {
     /// Last observed mtime of this pane's `/tmp/tmux-agent-activity*.log`.
     /// Used by `refresh_task_progress` to skip the (potentially expensive)
     /// re-parse when the log has not been touched since the previous tick.
-    pub task_progress_log_mtime: Option<std::time::SystemTime>,
+    pub task_progress_log_mtime: Option<(std::time::SystemTime, u64)>,
 }
 
 #[derive(Debug, Clone)]

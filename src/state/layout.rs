@@ -42,6 +42,7 @@ pub struct HyperlinkOverlay {
 /// `AppState` only holds data that survives across frames.
 #[derive(Debug, Clone, Default)]
 pub struct FrameLayout {
+    pub status_filter_targets: Vec<(StatusFilter, usize, usize)>,
     /// Filtered pane list, in the order the UI rendered them. Index
     /// matches `GlobalState::selected_pane_row`.
     pub pane_row_targets: Vec<RowTarget>,
@@ -131,34 +132,16 @@ impl AppState {
         }
         self.timers.last_filter_click = now;
 
-        let (all, running, background, waiting, idle, error) = self.status_counts();
-        // Layout: " ∑N  ●N  ◎N  ◐N  ○N  ✕N"
-        // Each filter item renders as `icon(1) + count`, so the clickable
-        // width is `1 + digits(count)`.
-        let mut x = 1usize; // leading space
-        let items: Vec<(StatusFilter, usize)> = vec![
-            (StatusFilter::All, 1 + format!("{all}").len()),
-            (StatusFilter::Running, 1 + format!("{running}").len()),
-            (StatusFilter::Background, 1 + format!("{background}").len()),
-            (StatusFilter::Waiting, 1 + format!("{waiting}").len()),
-            (StatusFilter::Idle, 1 + format!("{idle}").len()),
-            (StatusFilter::Error, 1 + format!("{error}").len()),
-        ];
         let col = col as usize;
-        for (i, (filter, width)) in items.iter().enumerate() {
-            if i > 0 {
-                x += 2; // "  " separator
-            }
-            if col >= x && col < x + width {
+        for (filter, start, end) in &self.layout.status_filter_targets {
+            if col >= *start && col < *end {
                 self.global.status_filter = *filter;
                 self.global.save_filter();
                 self.rebuild_row_targets();
                 return;
             }
-            x += width;
         }
     }
-
     /// Handle mouse click on the secondary header row (row 1).
     /// The repo filter button lives on the far right of this row.
     pub fn handle_secondary_header_click(&mut self, col: u16) {

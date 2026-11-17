@@ -93,6 +93,7 @@ fn extract_port(name: &str) -> Option<u16> {
     digits.parse::<u16>().ok()
 }
 
+#[cfg(any(not(windows), test))]
 fn parse_lsof_listening_ports(lsof_output: &str) -> Vec<(u32, u16)> {
     let mut current_pid: Option<u32> = None;
     let mut out = Vec::new();
@@ -110,6 +111,20 @@ fn parse_lsof_listening_ports(lsof_output: &str) -> Vec<(u32, u16)> {
     }
 
     out
+}
+
+#[cfg(windows)]
+fn parse_netstat_listening_ports(output: &str) -> Vec<(u32, u16)> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            if fields.len() != 5 || fields[0] != "TCP" || fields[3] != "LISTENING" {
+                return None;
+            }
+            Some((fields[4].parse().ok()?, extract_port(fields[1])?))
+        })
+        .collect()
 }
 
 /// Scan per-pane process state for the provided sessions.
@@ -160,8 +175,13 @@ pub(crate) fn scan_session_process_snapshot(
         }
     }
 
-    let lsof_output = run_command("lsof", &["-iTCP", "-sTCP:LISTEN", "-nP", "-F", "pn"])?;
-    let listening = parse_lsof_listening_ports(&lsof_output);
+    #[cfg(not(windows))]
+    let listening = parse_lsof_listening_ports(&run_command(
+        "lsof",
+        &["-iTCP", "-sTCP:LISTEN", "-nP", "-F", "pn"],
+    )?);
+    #[cfg(windows)]
+    let listening = parse_netstat_listening_ports(&run_command("netstat", &["-ano", "-p", "tcp"])?);
 
     let mut ports_by_pane: HashMap<String, BTreeSet<u16>> = HashMap::new();
     for (pid, port) in listening {

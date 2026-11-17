@@ -5,4 +5,7 @@
 .claude/*.lock
 dist
 .astro
+.tools/
+*.log
+key-context.txt
 node_modules

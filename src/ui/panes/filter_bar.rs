@@ -9,7 +9,10 @@ use crate::tmux::PaneStatus;
 use crate::ui::text::{display_width, truncate_to_width};
 
 /// Render the status filter bar.
-pub(super) fn render_filter_bar<'a>(state: &AppState) -> Line<'a> {
+pub(crate) fn render_filter_bar<'a>(
+    state: &AppState,
+    width: u16,
+) -> (Line<'a>, Vec<(StatusFilter, usize, usize)>) {
     let theme = &state.theme;
     let icons = &state.icons;
     let (all, running, background, waiting, idle, error) = state.status_counts();
@@ -38,10 +41,21 @@ pub(super) fn render_filter_bar<'a>(state: &AppState) -> Line<'a> {
 
     let mut spans: Vec<Span<'a>> = Vec::new();
     spans.push(Span::raw(" "));
+    let content_width: usize = items
+        .iter()
+        .map(|(_, (icon, _), count)| display_width(icon) + 1 + count.to_string().len())
+        .sum();
+    let spacing = (width as usize).saturating_sub(content_width + 2);
+    let gap = spacing / 5;
+    let extra = spacing % 5;
+    let mut column = 1;
+    let mut targets = Vec::new();
 
     for (i, (filter, (icon, icon_color), count)) in items.into_iter().enumerate() {
         if i > 0 {
-            spans.push(Span::raw("  "));
+            let padding = gap + usize::from(i <= extra);
+            spans.push(Span::raw(" ".repeat(padding)));
+            column += padding;
         }
 
         let is_selected = state.global.status_filter == filter;
@@ -51,8 +65,12 @@ pub(super) fn render_filter_bar<'a>(state: &AppState) -> Line<'a> {
             Style::default().fg(theme.filter_inactive)
         };
         spans.push(Span::styled(icon.to_string(), icon_style));
+        spans.push(Span::raw(" "));
 
         let count_str = format!("{count}");
+        let item_width = display_width(icon) + 1 + count_str.len();
+        targets.push((filter, column, column + item_width));
+        column += item_width;
         let count_style = if count == 0 {
             Style::default().fg(theme.filter_inactive)
         } else {
@@ -61,7 +79,7 @@ pub(super) fn render_filter_bar<'a>(state: &AppState) -> Line<'a> {
         spans.push(Span::styled(count_str, count_style));
     }
 
-    Line::from(spans)
+    (Line::from(spans), targets)
 }
 
 pub(super) fn render_secondary_header<'a>(
@@ -213,7 +231,7 @@ mod tests {
     }
 
     fn filter_bar_text(state: &AppState) -> String {
-        let line = render_filter_bar(state);
+        let (line, _) = render_filter_bar(state, 41);
         line.spans.iter().map(|s| s.content.as_ref()).collect()
     }
 
@@ -247,6 +265,7 @@ mod tests {
             worktree: crate::tmux::WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            model: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
         };
@@ -268,6 +287,7 @@ mod tests {
             worktree: crate::tmux::WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            model: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
         };
@@ -282,7 +302,7 @@ mod tests {
         state.global.status_filter = StatusFilter::Running;
         let theme = &state.theme;
 
-        let line = render_filter_bar(&state);
+        let (line, _) = render_filter_bar(&state, 41);
         let cells: Vec<_> = line
             .spans
             .iter()

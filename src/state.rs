@@ -40,6 +40,8 @@ pub enum BottomTab {
 }
 
 pub struct AppState {
+    pub(crate) codex: crate::codex::CodexMonitor,
+    pub(crate) metadata: crate::metadata::MetadataCache,
     pub now: u64,
     pub repo_groups: Vec<crate::group::RepoGroup>,
     /// Sidebar focus + pane focus tracking (sidebar_focused, focus,
@@ -139,6 +141,8 @@ pub struct AppState {
 impl AppState {
     pub fn new(tmux_pane: String) -> Self {
         let mut state = Self {
+            codex: crate::codex::CodexMonitor::default(),
+            metadata: crate::metadata::MetadataCache::default(),
             now: 0,
             repo_groups: vec![],
             focus_state: FocusState::new(),
@@ -220,6 +224,7 @@ mod tests {
             worktree: WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            model: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
         }
@@ -1250,12 +1255,16 @@ mod tests {
 
         // Click on "All" (x=1..3) should keep All
         reset_filter_debounce(&mut state);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
         state.handle_mouse_click(0, 1);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
         // Click on Running icon area (x=6..) should switch to Running
         reset_filter_debounce(&mut state);
-        state.handle_mouse_click(0, 6);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_mouse_click(0, 9);
         assert_eq!(state.global.status_filter, StatusFilter::Running);
 
         // agent selection unchanged
@@ -1436,36 +1445,50 @@ mod tests {
         // "All" at x=1..3
         state.global.status_filter = StatusFilter::Running;
         reset_filter_debounce(&mut state);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
         state.handle_filter_click(1);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
         reset_filter_debounce(&mut state);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
         state.handle_filter_click(3);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
         // "●0" at x=6..7
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(6);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(9);
         assert_eq!(state.global.status_filter, StatusFilter::Running);
 
         // "◎0" at x=10..11
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(10);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(16);
         assert_eq!(state.global.status_filter, StatusFilter::Background);
 
         // "◐0" at x=14..15
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(14);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(23);
         assert_eq!(state.global.status_filter, StatusFilter::Waiting);
 
         // "○0" at x=18..19
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(18);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(30);
         assert_eq!(state.global.status_filter, StatusFilter::Idle);
 
         // "✕0" at x=22..23
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(22);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(37);
         assert_eq!(state.global.status_filter, StatusFilter::Error);
     }
 
@@ -1475,12 +1498,18 @@ mod tests {
         state.global.status_filter = StatusFilter::All;
 
         // x=0 is leading space, x=4 and x=5 are separator
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
         state.handle_filter_click(0);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
         state.handle_filter_click(4);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
         state.handle_filter_click(5);
         assert_eq!(state.global.status_filter, StatusFilter::All);
     }
@@ -1492,15 +1521,21 @@ mod tests {
 
         // First click within debounce window should be ignored
         // (AppState::new sets last_filter_click to now)
-        state.handle_filter_click(6); // would be Running
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(9); // would be Running
         assert_eq!(state.global.status_filter, StatusFilter::All); // unchanged due to debounce
 
         // After resetting debounce, click should work
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(6);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(9);
         assert_eq!(state.global.status_filter, StatusFilter::Running);
 
         // Immediate second click should be debounced
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
         state.handle_filter_click(1); // would be All
         assert_eq!(state.global.status_filter, StatusFilter::Running); // unchanged
     }
@@ -1525,20 +1560,28 @@ mod tests {
         //          0123456789...
         // "●10" at x=6..8 (icon + "10")
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(6);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(9);
         assert_eq!(state.global.status_filter, StatusFilter::Running);
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(8);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(11);
         assert_eq!(state.global.status_filter, StatusFilter::Running);
 
         // "◎0" shifts to x=11..12
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(11);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(17);
         assert_eq!(state.global.status_filter, StatusFilter::Background);
 
         // "◐0" shifts to x=15..16
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(15);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(24);
         assert_eq!(state.global.status_filter, StatusFilter::Waiting);
     }
 
@@ -1567,7 +1610,9 @@ mod tests {
         // Click Running filter — row_targets should update immediately
         // Layout: " All  ●2  ◎0  ◐0  ○1  ✕0" → Running at x=6
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(6);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(9);
         assert_eq!(state.global.status_filter, StatusFilter::Running);
         assert_eq!(state.layout.pane_row_targets.len(), 2);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%1");
@@ -1576,7 +1621,9 @@ mod tests {
         // Click Idle filter — row_targets should update again
         // Layout: " All  ●2  ◎0  ◐0  ○1  ✕0" → Idle at x=18
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(18);
+        state.layout.status_filter_targets =
+            crate::ui::panes::filter_bar::render_filter_bar(&state, 41).1;
+        state.handle_filter_click(30);
         assert_eq!(state.global.status_filter, StatusFilter::Idle);
         assert_eq!(state.layout.pane_row_targets.len(), 1);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%2");

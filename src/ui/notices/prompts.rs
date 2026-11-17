@@ -65,7 +65,7 @@ fn plugin_root_from_exe() -> Option<String> {
 /// renders as `~/.tmux/plugins/...` so a screenshot or copy-paste
 /// from one user does not bake in another user's literal home path.
 fn tildify(path: &str) -> String {
-    match std::env::var("HOME") {
+    match std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) {
         Ok(home) => tildify_with_home(path, &home),
         Err(_) => path.to_string(),
     }

@@ -71,7 +71,19 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
         if create_only {
             return 0;
         }
-        let _ = tmux::run_tmux(&["kill-pane", "-t", &sidebar_pane]);
+        if let Some(target) = panes_output.lines().find_map(|line| {
+            let (pane, role) = line.split_once('|')?;
+            (role != "sidebar").then_some(pane)
+        }) {
+            if let Err(error) = tmux::run_tmux_capture(&["select-pane", "-t", target]) {
+                eprintln!("cannot focus terminal before closing sidebar: {error}");
+                return 1;
+            }
+        }
+        if let Err(error) = tmux::run_tmux_capture(&["kill-pane", "-t", &sidebar_pane]) {
+            eprintln!("cannot close sidebar: {error}");
+            return 1;
+        }
         return 0;
     }
 

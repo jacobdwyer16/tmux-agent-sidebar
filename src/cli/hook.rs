@@ -34,7 +34,26 @@ pub(crate) fn cmd_hook(args: &[String]) -> i32 {
         return 0;
     };
 
-    handle_event(&pane, agent_name, event)
+    let result = handle_event(&pane, agent_name, event);
+    if result == 0 {
+        if let Some(model) = input.get("model").and_then(serde_json::Value::as_str) {
+            crate::tmux::set_pane_option(&pane, "@pane_model", model);
+        }
+        if let Some(name) = input.get("agent_name").and_then(serde_json::Value::as_str) {
+            if !name.is_empty() {
+                crate::tmux::set_pane_option(&pane, crate::tmux::PANE_NAME, name);
+            }
+        }
+    }
+    if result == 0 && agent_name == "codex" {
+        if let Some(path) = input
+            .get("transcript_path")
+            .and_then(serde_json::Value::as_str)
+        {
+            crate::tmux::set_pane_option(&pane, crate::codex::TRANSCRIPT_OPTION, path);
+        }
+    }
+    result
 }
 
 // ─── event handler ──────────────────────────────────────────────────────────
@@ -100,7 +119,20 @@ fn handle_event(pane: &str, agent_name: &str, event: AgentEvent) -> i32 {
             session_id,
             ..
         } => {
-            let notifications = notification_settings();
+            let mut notifications = notification_settings();
+            if agent == "codex" {
+                let heartbeat =
+                    crate::tmux::get_pane_option_value(pane, crate::codex::HEARTBEAT_OPTION);
+                if !heartbeat.is_empty()
+                    && crate::time::now_epoch_secs().saturating_sub(
+                        heartbeat
+                            .parse::<u64>()
+                            .expect("invalid Codex monitor heartbeat"),
+                    ) < 5
+                {
+                    notifications.enabled = false;
+                }
+            }
             handlers::on_stop(
                 pane,
                 &context::make_ctx(&agent, &cwd, &permission_mode, &worktree, &session_id),

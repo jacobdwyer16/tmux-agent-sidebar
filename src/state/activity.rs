@@ -12,7 +12,7 @@ pub struct ActivityState {
     /// `(focused_pane_id, mtime)` of the activity log most recently
     /// rendered into `entries`. `refresh_activity_log` skips re-reading
     /// the log when neither field has changed.
-    pub log_cache: Option<(String, SystemTime)>,
+    pub log_cache: Option<(String, (SystemTime, u64))>,
 }
 
 impl ActivityState {

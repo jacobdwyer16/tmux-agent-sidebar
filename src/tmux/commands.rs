@@ -1,8 +1,57 @@
+#[cfg(all(windows, not(test)))]
+use std::os::windows::process::CommandExt;
+#[cfg(not(test))]
 use std::process::Command;
 
+#[cfg(not(test))]
+fn tmux_command(args: &[&str]) -> Command {
+    let mut command = Command::new(if cfg!(windows) { "psmux" } else { "tmux" });
+    #[cfg(windows)]
+    {
+        command.creation_flags(0x08000000);
+        command.env_remove("PSMUX_TARGET_SESSION");
+        command.env_remove("PSMUX_TARGET_FULL");
+    }
+    for arg in args {
+        #[cfg(windows)]
+        if matches!(*arg, "-hfb" | "-hf") {
+            for flag in arg[1..].chars() {
+                command.arg(format!("-{flag}"));
+            }
+            continue;
+        }
+        #[cfg(windows)]
+        let arg = super::windows::prepare_format(&super::windows::qualify_format(arg));
+        command.arg(arg);
+    }
+    command
+}
+
+pub fn current_pane_target() -> String {
+    let pane = std::env::var("TMUX_PANE").unwrap_or_default();
+    if pane.is_empty() || !cfg!(windows) {
+        return pane;
+    }
+    display_message(&pane, "#{pane_id}")
+}
+
+#[cfg(test)]
+pub fn run_tmux(_args: &[&str]) -> Option<String> {
+    None
+}
+
+#[cfg(not(test))]
 pub fn run_tmux(args: &[&str]) -> Option<String> {
-    let output = Command::new("tmux").args(args).output().ok()?;
+    if cfg!(debug_assertions) && std::env::var_os("TMUX_AGENT_SIDEBAR_TEST").is_some() {
+        return None;
+    }
+    let output = tmux_command(args).output().ok()?;
     if output.status.success() {
+        #[cfg(windows)]
+        return Some(super::windows::expand_output(&String::from_utf8_lossy(
+            &output.stdout,
+        )));
+        #[cfg(not(windows))]
         Some(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
         None
@@ -12,9 +61,17 @@ pub fn run_tmux(args: &[&str]) -> Option<String> {
 /// Run a tmux command, returning trimmed stdout on success and stderr on failure.
 /// Used by the spawn/remove flow so the UI can surface a meaningful error message
 /// instead of a silent fallthrough.
+#[cfg(test)]
+pub fn run_tmux_capture(_args: &[&str]) -> Result<String, String> {
+    Err("multiplexer subprocesses are disabled in unit tests".into())
+}
+
+#[cfg(not(test))]
 pub fn run_tmux_capture(args: &[&str]) -> Result<String, String> {
-    let output = Command::new("tmux")
-        .args(args)
+    if cfg!(debug_assertions) && std::env::var_os("TMUX_AGENT_SIDEBAR_TEST").is_some() {
+        return Err("multiplexer subprocesses are disabled by the test runner".into());
+    }
+    let output = tmux_command(args)
         .output()
         .map_err(|e| format!("failed to spawn tmux: {e}"))?;
     if output.status.success() {
@@ -76,6 +133,12 @@ pub fn new_window(session: &str, cwd: &str, name: &str) -> Result<(String, Strin
 /// cannot be written — silently dropping the failure would leave an
 /// un-removable pane.
 pub fn set_window_option(window: &str, key: &str, value: &str) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        super::windows::set(window, key, Some(value));
+        return Ok(());
+    }
+    #[cfg(not(windows))]
     run_tmux_capture(&["set", "-w", "-t", window, key, value]).map(|_| ())
 }
 
@@ -96,7 +159,14 @@ pub fn kill_window(window_id: &str) -> Result<(), String> {
 
 pub fn select_pane(pane_id: &str) {
     // Find the session containing this pane and switch to it first
-    let session_id = display_message(pane_id, "#{session_id}");
+    let session_id = display_message(
+        pane_id,
+        if cfg!(windows) {
+            "#{session_name}"
+        } else {
+            "#{session_id}"
+        },
+    );
     if !session_id.is_empty() {
         let _ = run_tmux(&["switch-client", "-t", &session_id]);
     }

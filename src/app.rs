@@ -101,7 +101,10 @@ pub fn run(
             } else {
                 window_inactive_count = window_inactive_count.saturating_add(1);
             }
-            git_tab_active.store(state.bottom_tab == BottomTab::GitStatus, Ordering::Relaxed);
+            git_tab_active.store(
+                state.bottom_panel_height > 0 && state.bottom_tab == BottomTab::GitStatus,
+                Ordering::Relaxed,
+            );
             last_refresh = std::time::Instant::now();
         }
 
@@ -111,7 +114,7 @@ pub fn run(
         }
 
         if let Ok(names) = session_rx.try_recv() {
-            state.sessions.names = names;
+            state.sessions.names.extend(names);
             state.sessions.dirty = true;
             needs_redraw = true;
         }

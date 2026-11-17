@@ -119,7 +119,7 @@ pub fn group_panes_by_repo(sessions: &[crate::tmux::SessionInfo]) -> Vec<RepoGro
                 };
 
                 let display_name = group_key
-                    .rsplit('/')
+                    .rsplit(['/', '\\'])
                     .next()
                     .unwrap_or(&group_key)
                     .to_string();
@@ -227,6 +227,7 @@ mod tests {
             worktree: crate::tmux::WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            model: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
         }

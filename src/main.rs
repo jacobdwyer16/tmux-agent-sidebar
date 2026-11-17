@@ -1,5 +1,7 @@
 use std::io;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
+#[cfg(unix)]
+use std::sync::atomic::Ordering;
 
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
@@ -44,12 +46,13 @@ fn main() -> io::Result<()> {
         std::process::exit(code);
     }
 
-    let tmux_pane = std::env::var("TMUX_PANE").unwrap_or_default();
+    let tmux_pane = tmux::current_pane_target();
     if tmux_pane.is_empty() {
         eprintln!("TMUX_PANE not set");
         std::process::exit(1);
     }
 
+    #[cfg(unix)]
     unsafe {
         let mut sa: libc::sigaction = std::mem::zeroed();
         sa.sa_sigaction = sigusr1_handler as *const () as libc::sighandler_t;
@@ -58,16 +61,8 @@ fn main() -> io::Result<()> {
     }
 
     let pid = std::process::id();
-    let _ = std::process::Command::new("tmux")
-        .args([
-            "set",
-            "-t",
-            &tmux_pane,
-            "-p",
-            tmux::SIDEBAR_PID,
-            &pid.to_string(),
-        ])
-        .output();
+    tmux::set_pane_option(&tmux_pane, tmux::SIDEBAR_PID, &pid.to_string());
+    tmux::set_pane_option(&tmux_pane, tmux::PANE_ROLE, "sidebar");
 
     let mut stdout = io::stdout();
     let _tui_session = TuiSession::enter(&mut stdout)?;
@@ -77,6 +72,7 @@ fn main() -> io::Result<()> {
     app::run(&mut terminal, tmux_pane, &NEEDS_REFRESH)
 }
 
+#[cfg(unix)]
 extern "C" fn sigusr1_handler(_: libc::c_int) {
     NEEDS_REFRESH.store(true, Ordering::Relaxed);
 }

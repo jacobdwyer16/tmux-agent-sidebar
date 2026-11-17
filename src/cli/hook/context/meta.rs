@@ -54,6 +54,9 @@ pub(in crate::cli::hook) fn is_system_message(s: &str) -> bool {
 }
 
 pub(in crate::cli::hook) fn clear_all_meta(pane: &str) {
+    tmux::unset_pane_option(pane, "@pane_model");
+    tmux::unset_pane_option(pane, tmux::PANE_NAME);
+    tmux::unset_pane_option(pane, crate::codex::TRANSCRIPT_OPTION);
     for key in &[
         tmux::PANE_AGENT,
         tmux::PANE_PROMPT,

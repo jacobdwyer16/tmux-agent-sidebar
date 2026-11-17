@@ -7,6 +7,8 @@ use crate::tmux::{self, AgentType, PaneStatus};
 /// Falls back to defaults if tmux variables are not set.
 #[derive(Debug, Clone)]
 pub struct ColorTheme {
+    pub model_name: Color,
+    pub agent_name: Color,
     /// Accent color shared by every "active / focused" affordance:
     /// the `┃` marker on the active pane, the focused repo header, the
     /// bottom panel border when Activity/Git is focused, and the repo
@@ -51,6 +53,8 @@ pub struct ColorTheme {
 impl Default for ColorTheme {
     fn default() -> Self {
         Self {
+            model_name: Color::Rgb(207, 119, 119),
+            agent_name: Color::Rgb(191, 177, 135),
             accent: Color::Indexed(153),
             border_inactive: Color::Indexed(240),
             status_all: Color::Indexed(111),
@@ -117,6 +121,8 @@ impl ColorTheme {
         theme.status_error = read(tmux::SIDEBAR_COLOR_ERROR, theme.status_error);
         theme.filter_inactive = read(tmux::SIDEBAR_COLOR_FILTER_INACTIVE, theme.filter_inactive);
         theme.agent_claude = read(tmux::SIDEBAR_COLOR_AGENT_CLAUDE, theme.agent_claude);
+        theme.model_name = read("@sidebar_color_model", theme.model_name);
+        theme.agent_name = read("@sidebar_color_agent_name", theme.agent_name);
         theme.agent_codex = read(tmux::SIDEBAR_COLOR_AGENT_CODEX, theme.agent_codex);
         theme.agent_opencode = read(tmux::SIDEBAR_COLOR_AGENT_OPENCODE, theme.agent_opencode);
         theme.pet_body = read(tmux::SIDEBAR_COLOR_PET_BODY, theme.pet_body);
@@ -165,6 +171,7 @@ impl ColorTheme {
             AgentType::Claude => self.agent_claude,
             AgentType::Codex => self.agent_codex,
             AgentType::OpenCode => self.agent_opencode,
+            AgentType::Pi | AgentType::Antigravity => self.agent_name,
             AgentType::Unknown => self.status_unknown,
         }
     }

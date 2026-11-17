@@ -1,7 +1,9 @@
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
+use crossterm::event::{
+    Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
+};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::state::{AppState, BottomTab, Focus};
@@ -61,6 +63,9 @@ pub(super) fn handle_key_event(
     state: &mut AppState,
     git_tab_active: &AtomicBool,
 ) -> bool {
+    if key.kind == KeyEventKind::Release {
+        return false;
+    }
     if state.is_notices_popup_open() {
         if key.code == KeyCode::Esc {
             state.close_notices_popup();
@@ -123,6 +128,10 @@ pub(super) fn handle_key_event(
                 state.global.status_filter = state.global.status_filter.prev();
                 state.global.save_filter();
                 state.rebuild_row_targets();
+            } else if state.focus_state.focus == Focus::Panes {
+                if let Some(pane) = &state.focus_state.focused_pane_id {
+                    crate::tmux::select_pane(pane);
+                }
             }
         }
         KeyCode::Char('l') | KeyCode::Right => {
@@ -130,10 +139,12 @@ pub(super) fn handle_key_event(
                 state.global.status_filter = state.global.status_filter.next();
                 state.global.save_filter();
                 state.rebuild_row_targets();
+            } else if state.focus_state.focus == Focus::Panes {
+                state.activate_selected_pane();
             }
         }
         KeyCode::Char('r') => {
-            if state.focus_state.focus == Focus::Filter {
+            if matches!(state.focus_state.focus, Focus::Filter | Focus::Panes) {
                 state.toggle_repo_popup();
             }
         }
@@ -158,8 +169,10 @@ pub(super) fn handle_key_event(
             state.rebuild_row_targets();
         }
         KeyCode::BackTab => {
-            state.next_bottom_tab();
-            git_tab_active.store(state.bottom_tab == BottomTab::GitStatus, Ordering::Relaxed);
+            if state.bottom_panel_height > 0 {
+                state.next_bottom_tab();
+                git_tab_active.store(state.bottom_tab == BottomTab::GitStatus, Ordering::Relaxed);
+            }
         }
         _ => {}
     }
@@ -174,7 +187,7 @@ fn pane_nav_down(state: &mut AppState) {
         Focus::Panes => {
             if state.move_pane_selection(1) {
                 state.global.queue_cursor_save();
-            } else {
+            } else if state.bottom_panel_height > 0 {
                 state.focus_state.focus = Focus::ActivityLog;
             }
         }
@@ -188,7 +201,7 @@ fn pane_nav_up(state: &mut AppState) {
         Focus::Panes => {
             if state.move_pane_selection(-1) {
                 state.global.queue_cursor_save();
-            } else {
+            } else if state.bottom_panel_height > 0 {
                 state.focus_state.focus = Focus::Filter;
             }
         }
@@ -275,6 +288,74 @@ mod tests {
         state.toggle_repo_popup();
         state.set_repo_popup_selected(0);
         state
+    }
+
+    #[test]
+    fn tree_only_navigation_stays_in_the_agent_list() {
+        let mut state = state_with_three_panes();
+        state.bottom_panel_height = 0;
+        let git_active = AtomicBool::new(false);
+        handle_key_event(key(KeyCode::Char('k')), &mut state, &git_active);
+        assert_eq!(state.global.selected_pane_row, 0);
+        assert_eq!(state.focus_state.focus, Focus::Panes);
+        for _ in 0..4 {
+            handle_key_event(key(KeyCode::Char('j')), &mut state, &git_active);
+        }
+        assert_eq!(state.global.selected_pane_row, 2);
+        assert_eq!(state.focus_state.focus, Focus::Panes);
+    }
+
+    #[test]
+    fn vim_right_activates_the_selected_agent() {
+        let mut state = state_with_three_panes();
+        state.global.selected_pane_row = 1;
+        handle_key_event(key(KeyCode::Char('l')), &mut state, &AtomicBool::new(false));
+        assert_eq!(state.focus_state.focused_pane_id.as_deref(), Some("%2"));
+    }
+
+    #[test]
+    fn repo_filter_opens_directly_from_the_agent_list() {
+        let mut state = state_with_three_panes();
+        handle_key_event(key(KeyCode::Char('r')), &mut state, &AtomicBool::new(false));
+        assert!(state.is_repo_popup_open());
+    }
+
+    #[test]
+    fn windows_key_release_does_not_skip_agent_rows() {
+        let mut state = state_with_three_panes();
+        let flag = AtomicBool::new(false);
+        for code in [KeyCode::Down, KeyCode::Char('j')] {
+            state.global.selected_pane_row = 0;
+            for expected in [1, 2] {
+                handle_key_event(
+                    KeyEvent::new_with_kind(code, KeyModifiers::NONE, KeyEventKind::Press),
+                    &mut state,
+                    &flag,
+                );
+                handle_key_event(
+                    KeyEvent::new_with_kind(code, KeyModifiers::NONE, KeyEventKind::Release),
+                    &mut state,
+                    &flag,
+                );
+                assert_eq!(state.global.selected_pane_row, expected);
+            }
+        }
+        for code in [KeyCode::Up, KeyCode::Char('k')] {
+            state.global.selected_pane_row = 2;
+            for expected in [1, 0] {
+                handle_key_event(
+                    KeyEvent::new_with_kind(code, KeyModifiers::NONE, KeyEventKind::Press),
+                    &mut state,
+                    &flag,
+                );
+                handle_key_event(
+                    KeyEvent::new_with_kind(code, KeyModifiers::NONE, KeyEventKind::Release),
+                    &mut state,
+                    &flag,
+                );
+                assert_eq!(state.global.selected_pane_row, expected);
+            }
+        }
     }
 
     #[test]

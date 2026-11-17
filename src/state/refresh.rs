@@ -23,7 +23,7 @@ struct PaneTaskUpdate {
     progress: Option<TaskProgress>,
     dismissed_total: Option<usize>,
     inactive_since: Option<u64>,
-    log_mtime: Option<std::time::SystemTime>,
+    log_mtime: Option<(std::time::SystemTime, u64)>,
 }
 
 pub(crate) fn classify_task_progress(
@@ -73,6 +73,7 @@ impl AppState {
             })
             .collect();
         self.repo_groups = crate::group::group_panes_by_repo(&sessions);
+        self.refresh_session_names();
         if !self.sessions.dirty
             && self
                 .repo_groups
@@ -148,6 +149,17 @@ impl AppState {
         self.refresh_now();
         let (focused, window_active, _, _) = tmux::get_sidebar_pane_info(&self.tmux_pane);
         let (mut sessions, mut process_snapshot) = tmux::query_sessions_with_process_snapshot();
+        let model_errors = crate::metadata::refresh(&mut self.metadata, &mut sessions);
+        if !model_errors.is_empty() {
+            self.set_flash(model_errors.join("; "));
+        }
+        let codex_errors = crate::codex::refresh(&mut self.codex, &mut sessions, |pane| {
+            tmux::run_tmux(&["capture-pane", "-p", "-t", pane])
+                .ok_or_else(|| format!("cannot inspect Codex pane {pane}"))
+        });
+        if !codex_errors.is_empty() {
+            self.set_flash(format!("Codex monitor: {}", codex_errors.join("; ")));
+        }
         self.sweep_dead_bg_shells_if_due(&mut sessions, &mut process_snapshot);
         if let Some(process_snapshot) = self.refresh_port_data(&sessions, process_snapshot.as_ref())
         {
@@ -178,8 +190,6 @@ impl AppState {
                     && let Some(name) = self.sessions.names.get(sid)
                 {
                     pane.session_name.clone_from(name);
-                } else {
-                    pane.session_name.clear();
                 }
             }
         }
@@ -476,6 +486,7 @@ mod tests {
             worktree: WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            model: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
         }
@@ -867,7 +878,7 @@ mod tests {
     }
 
     #[test]
-    fn refresh_session_names_clears_stale_label_when_session_id_missing() {
+    fn refresh_session_names_preserves_label_during_cache_gaps() {
         // Pane already has a label from a previous tick, but its
         // session_id no longer appears in the cached map (e.g. the
         // session JSON file was deleted). The label must be cleared so
@@ -879,8 +890,8 @@ mod tests {
         state.refresh_session_names();
 
         assert!(
-            state.repo_groups[0].panes[0].0.session_name.is_empty(),
-            "stale session_name must be cleared when the cache no longer has it"
+            state.repo_groups[0].panes[0].0.session_name == "old-label",
+            "a temporary cache gap must not rotate the agent label"
         );
     }
 
@@ -904,6 +915,23 @@ mod tests {
     }
 
     #[test]
+    fn apply_session_snapshot_preserves_cached_name_between_polls() {
+        let mut state = state_with_panes(vec![pane_with_session("%1", "sess-a")]);
+        state
+            .sessions
+            .names
+            .insert("sess-a".into(), "research".into());
+        state.sessions.dirty = false;
+        for _ in 0..3 {
+            state.apply_session_snapshot(
+                false,
+                test_session(vec![pane_with_session("%1", "sess-a")]),
+            );
+            assert_eq!(state.repo_groups[0].panes[0].0.session_name, "research");
+        }
+    }
+
+    #[test]
     fn apply_session_snapshot_does_not_mark_dirty_when_session_ids_unchanged() {
         // Same pane, same session_id across snapshots — no need to
         // re-walk every pane, dirty flag should stay clear.
@@ -920,7 +948,7 @@ mod tests {
     }
 
     #[test]
-    fn refresh_session_names_clears_label_for_pane_with_no_session_id() {
+    fn refresh_session_names_preserves_reported_name_without_claude_session_id() {
         // Pane has a session_name set but no session_id (e.g. a
         // non-Claude agent or a pane that has not reported one yet).
         // The function must not preserve a label that no longer ties
@@ -932,8 +960,8 @@ mod tests {
         state.refresh_session_names();
 
         assert!(
-            state.repo_groups[0].panes[0].0.session_name.is_empty(),
-            "pane without session_id must end up with an empty session_name"
+            state.repo_groups[0].panes[0].0.session_name == "stray",
+            "non-Claude session names must remain stable"
         );
     }
 }

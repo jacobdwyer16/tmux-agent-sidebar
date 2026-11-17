@@ -159,6 +159,9 @@ pub fn set_pane_option(pane: &str, key: &str, value: &str) {
     if test_mock::intercept_set(pane, key, value) {
         return;
     }
+    #[cfg(all(windows, not(test)))]
+    super::windows::set(pane, key, Some(value));
+    #[cfg(not(windows))]
     let _ = run_tmux(&["set", "-t", pane, "-p", key, value]);
 }
 
@@ -167,6 +170,9 @@ pub fn unset_pane_option(pane: &str, key: &str) {
     if test_mock::intercept_unset(pane, key) {
         return;
     }
+    #[cfg(all(windows, not(test)))]
+    super::windows::set(pane, key, None);
+    #[cfg(not(windows))]
     let _ = run_tmux(&["set", "-t", pane, "-p", "-u", key]);
 }
 
@@ -175,6 +181,11 @@ pub fn get_pane_option_value(pane: &str, key: &str) -> String {
     if let Some(value) = test_mock::intercept_get(pane, key) {
         return value;
     }
+    #[cfg(all(windows, not(test)))]
+    return super::windows::get(pane, key);
+    #[cfg(all(windows, test))]
+    return String::new();
+    #[cfg(not(windows))]
     run_tmux(&["show", "-t", pane, "-pv", key])
         .map(|s| s.trim().to_string())
         .unwrap_or_default()

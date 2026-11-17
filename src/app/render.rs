@@ -40,6 +40,9 @@ pub(super) fn render_frame(
 }
 
 pub(super) fn refresh_git_for_focused_pane(state: &mut AppState) {
+    if state.bottom_panel_height == 0 {
+        return;
+    }
     refresh_git_for_focused_pane_with(
         state.focus_state.focused_pane_id.clone(),
         tmux::get_pane_path,

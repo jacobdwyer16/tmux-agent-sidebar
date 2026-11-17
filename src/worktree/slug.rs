@@ -43,7 +43,7 @@ pub fn worktree_path_for(
         .filter(|s| !s.is_empty())
         .unwrap_or(DEFAULT_WORKTREE_DIR);
     let dir = Path::new(dir);
-    if dir.is_absolute() || dir.components().any(|c| c == Component::ParentDir) {
+    if dir.has_root() || dir.components().any(|c| c == Component::ParentDir) {
         return None;
     }
     Some(repo_root.join(dir).join(slug))

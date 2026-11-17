@@ -99,7 +99,7 @@ pub fn installed_plugin_status() -> ClaudePluginStatus {
 }
 
 fn claude_plugins_registry_path() -> Option<PathBuf> {
-    let home = std::env::var_os("HOME")?;
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })?;
     Some(PathBuf::from(home).join(".claude/plugins/installed_plugins.json"))
 }
 
@@ -181,7 +181,7 @@ pub fn claude_settings_has_residual_hooks() -> bool {
 }
 
 fn claude_settings_path() -> PathBuf {
-    std::env::var_os("HOME")
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
         .map(PathBuf::from)
         .unwrap_or_default()
         .join(".claude/settings.json")

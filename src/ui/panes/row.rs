@@ -132,6 +132,7 @@ mod tests {
             worktree: WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            model: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
         }
@@ -156,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn render_pane_lines_shows_permission_badge() {
+    fn render_pane_lines_shows_model_and_name_without_permission_badge() {
         let theme = ColorTheme::default();
         let pane = pane(PermissionMode::Auto, PaneStatus::Running, "");
         let lines = render_pane_lines_with_ports(
@@ -174,11 +175,26 @@ mod tests {
         );
 
         let status = line_text(&lines[0]);
-        assert!(status.contains(" codex auto"));
+        assert!(status.contains("model pending codex"));
+        assert!(!status.contains("auto"));
+        assert!(
+            lines[0]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("model pending")
+                    && span.style.fg == Some(theme.model_name))
+        );
+        assert!(
+            lines[0]
+                .spans
+                .iter()
+                .any(|span| span.content.contains("codex")
+                    && span.style.fg == Some(theme.agent_name))
+        );
     }
 
     #[test]
-    fn render_pane_lines_shows_defer_badge() {
+    fn render_pane_lines_omits_defer_permission_badge() {
         let theme = ColorTheme::default();
         let pane = pane(PermissionMode::Defer, PaneStatus::Running, "");
         let lines = render_pane_lines_with_ports(
@@ -197,8 +213,8 @@ mod tests {
 
         let status = line_text(&lines[0]);
         assert!(
-            status.contains(" codex defer"),
-            "defer permission mode should render its badge, got: {status}"
+            status.contains("codex") && !status.contains("defer"),
+            "permission modes must not replace the model and agent name: {status}"
         );
     }
 
@@ -554,7 +570,7 @@ mod tests {
 
         assert!(lines.len() >= 2);
         let status = line_text(&lines[0]);
-        assert!(status.contains(" codex !"));
+        assert!(status.contains("codex") && !status.contains('!'));
         assert!(!line_text(&lines[1]).contains("Waiting for prompt"));
     }
 

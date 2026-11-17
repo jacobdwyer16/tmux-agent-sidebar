@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 /// Return the path to Claude Code's sessions directory.
 fn sessions_dir() -> Option<PathBuf> {
-    let home = std::env::var("HOME").ok()?;
+    let home = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).ok()?;
     let dir = PathBuf::from(home).join(".claude").join("sessions");
     if dir.is_dir() { Some(dir) } else { None }
 }
@@ -11,6 +11,17 @@ fn sessions_dir() -> Option<PathBuf> {
 /// Scan `~/.claude/sessions/*.json` for session names.
 pub fn scan_session_names() -> HashMap<String, String> {
     let mut map = HashMap::new();
+    let home = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).ok();
+    if let Some(home) = home
+        && let Ok(index) =
+            std::fs::read_to_string(PathBuf::from(home).join(".codex/session_index.jsonl"))
+    {
+        for line in index.lines() {
+            if let Some((id, name)) = parse_codex_session_name(line) {
+                map.insert(id, name);
+            }
+        }
+    }
     let Some(dir) = sessions_dir() else {
         return map;
     };
@@ -29,6 +40,16 @@ pub fn scan_session_names() -> HashMap<String, String> {
     map
 }
 
+fn parse_codex_session_name(line: &str) -> Option<(String, String)> {
+    let value: serde_json::Value = serde_json::from_str(line).ok()?;
+    let id = value.get("id")?.as_str()?.trim();
+    let name = value.get("thread_name")?.as_str()?.trim();
+    if id.is_empty() || name.is_empty() {
+        return None;
+    }
+    Some((id.to_owned(), name.to_owned()))
+}
+
 /// Parse a single session JSON file, returning `(sessionId, name)` if both exist.
 fn parse_session_file(path: &std::path::Path) -> Option<(String, String)> {
     let content = std::fs::read_to_string(path).ok()?;
@@ -45,6 +66,15 @@ fn parse_session_file(path: &std::path::Path) -> Option<(String, String)> {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn codex_session_title_uses_exact_id() {
+        assert_eq!(
+            parse_codex_session_name(r#"{"id":"thread-1","thread_name":"Review sidebar"}"#),
+            Some(("thread-1".into(), "Review sidebar".into()))
+        );
+        assert!(parse_codex_session_name(r#"{"id":"thread-1","thread_name":" "}"#).is_none());
+    }
 
     #[test]
     fn parse_session_file_with_name() {

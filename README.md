@@ -1,5 +1,9 @@
 <h1 align="center">tmux-agent-sidebar</h1>
 
+This fork preserves the native Windows psmux/WezTerm port and customized agent
+tree, including Codex monitoring and local Pi and Antigravity CLI integrations.
+See [Native Windows with psmux](#native-windows-with-psmux) for setup and controls.
+
 <p align="center">One tmux sidebar that tracks every Claude Code, Codex, and OpenCode pane across every session and window. See status, background shells, prompts, Git state, activity, and worktrees without switching windows.</p>
 
 <p align="center"><img src="website/src/assets/captures/hero.png" alt="tmux-agent-sidebar hero" /></p>
@@ -112,6 +116,57 @@ rm -f bin/tmux-agent-sidebar
 
 Note: Claude Code's plugin updater may overwrite the symlink on a future
 update; re-run the symlink step if that happens.
+
+## Native Windows with psmux
+
+This local checkout includes a Windows port for the psmux and WezTerm setup.
+The installed executable is `bin/tmux-agent-sidebar.exe`.
+
+- `prefix + e` toggles the sidebar in the current window.
+- `prefix + E` toggles sidebars across windows.
+- The bottom Git/Activity panel is hidden in the local Windows configuration.
+- Inside the sidebar, `j`/`k` select agents, `l` or Enter opens the selected agent,
+  and `h` returns to the previously focused terminal. `r` opens the repo picker;
+  Tab cycles status filters. Mouse targets follow the evenly spaced status icons.
+- Up/Down also visit each agent in order. Windows key-release events are ignored
+  so one tap moves one row. Existing prefix + arrow pane bindings still work.
+- Models appear in muted red and stable session names in pastel yellow. Permission
+  mode badges are hidden. Each header icon has a space before its count.
+- TCP port listings are hidden from agent rows.
+- Codex status follows the exact bound session transcript and current terminal,
+  including running, completion, errors, approvals, and active child agents.
+- `install-agent-integrations.ps1` installs the local Pi extension and Google's
+  Antigravity CLI status-line reporter, preserving existing settings with backups.
+  Restart an already-running Pi or Antigravity terminal to load its integration.
+- `windows-sidebar.ps1 toggle -Window 'session:@1'` targets a specific window.
+- Restart or resume existing Claude Code and Codex sessions to load the new hooks.
+- Claude and Codex hook configurations retain their existing entries. The installer
+  creates timestamped `.sidebar-backup-*` copies before editing them.
+
+Windows uses session-qualified stable window and pane IDs, locked JSON metadata
+under `%TEMP%/tmux-agent-sidebar-psmux`, Windows process discovery, `netstat`, and
+native toast notifications. WezTerm needs no configuration changes.
+
+Rebuild from this directory with `cargo build --release`, close the sidebar, and
+copy `target/release/tmux-agent-sidebar.exe` to `bin/tmux-agent-sidebar.exe`.
+Run `install-windows.ps1` to reinstall the hooks and psmux bindings.
+
+Run tests through `powershell.exe -NoProfile -File ./test-windows.ps1`. This disables
+real multiplexer calls in the integration-test process. Unit builds also disable
+those calls. Running the upstream tests without isolation can alter live sessions.
+
+Validated on this machine: release build, 1,295 passing Rust tests, two ignored
+upstream live-tmux tests, formatting, session discovery, sidebar toggle through the
+actual WezTerm prefix key sequence (open, close, reopen), sequential agent navigation,
+Pi and Antigravity startup with live model/status reporting, prompt/activity/completion hooks, scratch window creation,
+and Windows toast acceptance. Visual toast delivery depends on Windows notification
+settings. Worktree marker handling has regression coverage; a complete agent/worktree
+creation and deletion cycle has not been exercised against live repositories.
+
+Clippy completes with warnings. The machine's global Cargo configuration denies
+indexing, unwrap, and panic patterns already present upstream; validation used
+`cargo clippy --offline --all-targets -- -A clippy::unwrap_used -A clippy::panic -A clippy::indexing_slicing`.
+Ruff, ty, and pytest do not apply to these Rust and PowerShell changes.
 
 ## License
 

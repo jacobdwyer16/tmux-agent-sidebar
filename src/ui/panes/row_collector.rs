@@ -101,13 +101,12 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
             let is_active = state.focus_state.focused_pane_id.as_ref() == Some(&pane.pane_id);
 
             let pane_state = state.pane_state(&pane.pane_id);
-            let ports = pane_state.map(|s| s.ports.as_slice());
             let task_progress = pane_state.and_then(|s| s.task_progress.as_ref());
             let status_line_idx = collected.lines.len();
             let pane_lines = row::render_pane_lines_with_ports(
                 pane,
                 git_info,
-                ports,
+                None,
                 task_progress,
                 is_selected,
                 is_active,
@@ -133,7 +132,7 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
                 && git_info.is_worktree
                 && pane_line_count >= 2
                 && let Some(x) =
-                    row::sidebar_remove_marker_col(git_info, ports, true, width.saturating_sub(2))
+                    row::sidebar_remove_marker_col(git_info, None, true, width.saturating_sub(2))
             {
                 collected
                     .pending_remove
@@ -173,6 +172,7 @@ mod tests {
             worktree: WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            model: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
         }

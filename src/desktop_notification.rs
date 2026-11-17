@@ -1,4 +1,8 @@
 use std::collections::{HashMap, HashSet};
+#[cfg(all(windows, not(test)))]
+use std::fs::File;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::process::Command;
 use std::process::Stdio;
 use std::thread::sleep;
@@ -171,6 +175,20 @@ pub fn notify_if_allowed(
         return false;
     }
 
+    #[cfg(all(windows, not(test)))]
+    let _guard = {
+        let name: String = pane_id.bytes().map(|byte| format!("{byte:02x}")).collect();
+        let file = File::options()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(std::env::temp_dir().join(format!("sidebar-notification-{name}.lock")))
+            .expect("cannot open notification lock");
+        file.lock().expect("cannot lock pane notifications");
+        file
+    };
+
     let key = stamp_option_key(kind);
     let normalized_fingerprint = normalize_fingerprint(fingerprint);
     let now = now_epoch_secs();
@@ -265,8 +283,26 @@ fn send_desktop_notification(title: &str, body: &str) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        let _ = (title, body);
-        Err("desktop notifications are not supported on Windows yet".into())
+        let script = r#"
+$ErrorActionPreference = 'Stop'
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
+[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] > $null
+$xml = [Windows.Data.Xml.Dom.XmlDocument]::new()
+$title = [System.Security.SecurityElement]::Escape($env:SIDEBAR_NOTIFY_TITLE)
+$body = [System.Security.SecurityElement]::Escape($env:SIDEBAR_NOTIFY_BODY)
+$xml.LoadXml("<toast><visual><binding template='ToastGeneric'><text>$title</text><text>$body</text></binding></visual></toast>")
+$toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
+[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Microsoft.Windows.PowerShell').Show($toast)
+"#;
+        let mut command = Command::new("powershell.exe");
+        command
+            .creation_flags(0x08000000)
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .env("SIDEBAR_NOTIFY_TITLE", title)
+            .env("SIDEBAR_NOTIFY_BODY", body)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        run_notification_command(&mut command, "Windows toast", DESKTOP_NOTIFICATION_TIMEOUT)
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
@@ -309,7 +345,16 @@ fn notification_backend_available() -> bool {
 
     #[cfg(target_os = "windows")]
     {
-        false
+        let mut command = Command::new("powershell.exe");
+        command.creation_flags(0x08000000)
+            .args(["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference = 'Stop'; [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null"])
+            .stdout(Stdio::null()).stderr(Stdio::null());
+        run_notification_command(
+            &mut command,
+            "Windows toast",
+            DESKTOP_NOTIFICATION_PROBE_TIMEOUT,
+        )
+        .is_ok()
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]

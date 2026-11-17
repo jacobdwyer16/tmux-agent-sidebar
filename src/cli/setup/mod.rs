@@ -51,6 +51,14 @@ pub(crate) fn shell_quote(s: &str) -> String {
 /// Build the `bash <hook_script> <agent> <event>` command string with
 /// proper POSIX quoting so arbitrary installation paths are safe.
 fn format_hook_command(hook_script: &str, agent: &str, event: &str) -> String {
+    if hook_script.ends_with(".exe") {
+        return format!(
+            "\"{}\" hook {} {}",
+            hook_script.replace('\\', "/"),
+            agent,
+            event
+        );
+    }
     format!("bash {} {} {}", shell_quote(hook_script), agent, event)
 }
 
@@ -248,7 +256,7 @@ fn expand_home_tilde(path: &str) -> String {
     let Some(rest) = path.strip_prefix("~/") else {
         return path.to_string();
     };
-    let Some(home) = std::env::var_os("HOME") else {
+    let Some(home) = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) else {
         return path.to_string();
     };
     let mut p = std::path::PathBuf::from(home);
@@ -355,6 +363,15 @@ const FALLBACK_HOOK_SCRIPT: &str = "~/.tmux/plugins/tmux-agent-sidebar/hook.sh";
 /// `detected = false` and `cmd_setup` surfaces a stderr warning. Never
 /// panics.
 pub(crate) fn resolve_hook_script() -> ResolvedHookScript {
+    if cfg!(windows) {
+        return ResolvedHookScript {
+            path: std::env::current_exe()
+                .expect("executable path is required")
+                .to_string_lossy()
+                .replace('\\', "/"),
+            detected: true,
+        };
+    }
     walk_up_from_exe(3, |dir| {
         let candidate = dir.join("hook.sh");
         candidate
@@ -396,7 +413,7 @@ where
 /// Return the default config path for `agent` under the current user's home.
 #[allow(dead_code)]
 pub(crate) fn config_path_for_agent(agent: &str) -> Option<PathBuf> {
-    let home = std::env::var_os("HOME")?;
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })?;
     let home = PathBuf::from(home);
     match agent {
         "claude" => Some(home.join(".claude/settings.json")),

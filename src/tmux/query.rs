@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use crate::process::{ProcessSnapshot, command_basename};
+use crate::process::{CODEX_HOST, ProcessSnapshot, command_basename};
 
 use super::commands::run_tmux;
 use super::options::{
@@ -95,6 +95,7 @@ fn pane_format() -> String {
         q(PANE_SESSION_ID),
         q(SPAWNED_OPTION),
         q(PANE_BG_CMD),
+        q("@pane_model"),
     ]
     .join("|")
 }
@@ -263,9 +264,18 @@ fn parse_pane_fields_with_processes(
         return None;
     }
 
-    let agent = AgentType::from_label(&parts[pane_line_field::AGENT])?;
     let current_command = parts[pane_line_field::PANE_CURRENT_COMMAND].as_str();
     let pane_pid: Option<u32> = parts[pane_line_field::PANE_PID].parse().ok();
+    let codex_host = command_basename(current_command) == CODEX_HOST
+        || pane_pid.is_some_and(|pid| {
+            process_snapshot.is_some_and(|snapshot| snapshot.tree_has_codex_host(pid))
+        });
+    let agent = AgentType::from_label(&parts[pane_line_field::AGENT])
+        .or_else(|| codex_host.then_some(AgentType::Codex))
+        .or_else(|| {
+            pane_pid
+                .and_then(|pid| process_snapshot.and_then(|snapshot| snapshot.agent_for_tree(pid)))
+        })?;
 
     // Codex / OpenCode panes can leave stale tmux metadata behind after the
     // agent exits and the pane falls back to the user's shell. Neither
@@ -276,7 +286,10 @@ fn parse_pane_fields_with_processes(
     // is gone. Subsequent polls short-circuit at the `AgentType::from_label`
     // check above once `@pane_agent` has been cleared. Claude is excluded
     // because its SessionEnd hook drives cleanup instead.
-    if matches!(agent, AgentType::Codex | AgentType::OpenCode) && is_shell_command(current_command)
+    if matches!(
+        agent,
+        AgentType::Codex | AgentType::OpenCode | AgentType::Pi | AgentType::Antigravity
+    ) && is_shell_command(current_command)
     {
         let agent_still_alive = pane_pid
             .and_then(|pid| {
@@ -323,7 +336,11 @@ fn parse_pane_fields_with_processes(
         attention: !parts[pane_line_field::PANE_ATTENTION].is_empty(),
         agent,
         path,
-        current_command: parts[pane_line_field::PANE_CURRENT_COMMAND].to_string(),
+        current_command: if codex_host {
+            CODEX_HOST.to_string()
+        } else {
+            current_command.to_string()
+        },
         pane_id: parts[pane_line_field::PANE_ID].to_string(),
         prompt,
         prompt_is_response,
@@ -337,7 +354,11 @@ fn parse_pane_fields_with_processes(
             branch: parts[pane_line_field::WORKTREE_BRANCH].to_string(),
         },
         session_id,
-        session_name: String::new(),
+        session_name: parts.get(4).cloned().unwrap_or_default(),
+        model: parts
+            .get(pane_line_field::MIN_FIELDS)
+            .cloned()
+            .unwrap_or_default(),
         sidebar_spawned: parts[pane_line_field::SIDEBAR_SPAWNED] == "1",
         bg_shell_cmd: {
             let raw = &parts[pane_line_field::BG_CMD];
@@ -360,6 +381,9 @@ fn parse_pane_fields_with_processes(
 /// key is added.
 fn clear_agent_pane_state(pane_id: &str) {
     const KEYS: &[&str] = &[
+        "@pane_model",
+        PANE_NAME,
+        crate::codex::TRANSCRIPT_OPTION,
         PANE_AGENT,
         PANE_PROMPT,
         PANE_PROMPT_SOURCE,
@@ -444,8 +468,18 @@ fn pane_output_needs_process_snapshot(all_panes_output: &str) -> bool {
             return false;
         }
         let pane_fields = &parts[session_line_field::PANE_LINE_OFFSET..];
-        AgentType::from_label(&pane_fields[pane_line_field::AGENT])
-            .is_some_and(|agent| matches!(agent, AgentType::Codex | AgentType::OpenCode))
+        if cfg!(windows)
+            && pane_fields[pane_line_field::AGENT].is_empty()
+            && pane_fields[pane_line_field::PANE_ROLE] != "sidebar"
+        {
+            return true;
+        }
+        AgentType::from_label(&pane_fields[pane_line_field::AGENT]).is_some_and(|agent| {
+            matches!(
+                agent,
+                AgentType::Codex | AgentType::OpenCode | AgentType::Pi | AgentType::Antigravity
+            )
+        })
     })
 }
 
@@ -601,6 +635,7 @@ mod tests {
             worktree: WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            model: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
         }
@@ -910,6 +945,24 @@ mod tests {
     }
 
     #[test]
+    fn codex_host_is_visible_without_cli_hooks() {
+        let mut fields = full_fields();
+        fields[pane_line_field::AGENT] = "";
+        fields[pane_line_field::PANE_CURRENT_COMMAND] = "powershell.exe";
+        fields[pane_line_field::PANE_PID] = "100";
+        fields[pane_line_field::PANE_STATUS] = "";
+        let snapshot = process_snapshot(
+            "100 1 powershell.exe powershell.exe\n101 100 codex-code-mode-host.exe codex-code-mode-host.exe\n",
+        );
+        let pane = parse_pane_fields_with_processes(&field_strings(&fields), Some(&snapshot))
+            .expect("Codex host must remain visible while its tools run");
+        assert_eq!(pane.agent, AgentType::Codex);
+        assert_eq!(pane.status, PaneStatus::Unknown);
+        assert_eq!(pane.current_command, CODEX_HOST);
+        assert!(snapshot.tree_has_agent(&[100], &AgentType::Codex));
+    }
+
+    #[test]
     fn parse_pane_line_falls_back_to_pane_current_path() {
         let mut fields = full_fields();
         fields[15] = ""; // empty pane_cwd
@@ -1000,6 +1053,15 @@ mod tests {
             Some("keep me"),
             "claude prompt must survive — SessionEnd hook is the clear path",
         );
+    }
+
+    #[test]
+    fn reporting_agents_request_process_snapshot() {
+        for agent in ["pi", "antigravity"] {
+            let mut fields = vec![""; session_line_field::MIN_FIELDS];
+            fields[session_line_field::PANE_LINE_OFFSET + pane_line_field::AGENT] = agent;
+            assert!(pane_output_needs_process_snapshot(&fields.join("|")));
+        }
     }
 
     #[test]
@@ -1187,6 +1249,7 @@ mod tests {
                     worktree: WorktreeMetadata::default(),
                     session_id: None,
                     session_name: String::new(),
+                    model: String::new(),
                     sidebar_spawned: false,
                     bg_shell_cmd: None,
                 }],
