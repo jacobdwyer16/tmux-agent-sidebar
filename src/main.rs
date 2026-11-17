@@ -61,6 +61,8 @@ fn main() -> io::Result<()> {
     }
 
     let pid = std::process::id();
+    #[cfg(windows)]
+    tmux::unset_pane_option(&tmux_pane, tmux::SIDEBAR_CLOSE_REQUEST);
     tmux::set_pane_option(&tmux_pane, tmux::SIDEBAR_PID, &pid.to_string());
     tmux::set_pane_option(&tmux_pane, tmux::PANE_ROLE, "sidebar");
 

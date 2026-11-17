@@ -6,6 +6,8 @@ mod types;
 #[cfg(windows)]
 mod windows;
 
+pub use options::SIDEBAR_CLOSE_REQUEST;
+
 pub use commands::{
     current_pane_target, display_message, kill_window, new_window, pane_session_name, run_tmux,
     run_tmux_capture, select_pane, send_command, set_window_option,

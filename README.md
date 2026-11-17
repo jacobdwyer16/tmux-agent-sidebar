@@ -123,6 +123,8 @@ This local checkout includes a Windows port for the psmux and WezTerm setup.
 The installed executable is `bin/tmux-agent-sidebar.exe`.
 
 - `prefix + e` toggles the sidebar in the current window.
+- Windows close requests stop the sidebar's refresh loop before its pane exits,
+  preventing transient deleted-pane errors when closing a focused sidebar.
 - `prefix + E` toggles sidebars across windows.
 - The bottom Git/Activity panel is hidden in the local Windows configuration.
 - Inside the sidebar, `j`/`k` select agents, `l` or Enter opens the selected agent,

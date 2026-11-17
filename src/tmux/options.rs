@@ -1,5 +1,7 @@
 use super::commands::run_tmux;
 
+pub const SIDEBAR_CLOSE_REQUEST: &str = "@pane_sidebar_close_requested";
+
 // ─── Pane-scoped option keys ─────────────────────────────────────────
 //
 // Single source of truth for every `@pane_*` tmux option the sidebar

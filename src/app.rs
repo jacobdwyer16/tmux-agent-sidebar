@@ -48,6 +48,12 @@ pub fn run(
     let mut needs_redraw = true;
 
     loop {
+        #[cfg(windows)]
+        if crate::tmux::get_pane_option_value(&state.tmux_pane, crate::tmux::SIDEBAR_CLOSE_REQUEST)
+            == "1"
+        {
+            return Ok(());
+        }
         if needs_redraw {
             render::render_frame(terminal, &mut state)?;
             needs_redraw = false;

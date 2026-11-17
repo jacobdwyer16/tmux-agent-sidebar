@@ -80,7 +80,7 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
                 return 1;
             }
         }
-        if let Err(error) = tmux::run_tmux_capture(&["kill-pane", "-t", &sidebar_pane]) {
+        if let Err(error) = close_sidebar(&sidebar_pane) {
             eprintln!("cannot close sidebar: {error}");
             return 1;
         }
@@ -153,7 +153,10 @@ pub(crate) fn cmd_toggle_all(_args: &[String]) -> i32 {
         for line in all_panes.lines() {
             let parts: Vec<&str> = line.splitn(2, '|').collect();
             if parts.len() >= 2 && parts[1] == "sidebar" {
-                let _ = tmux::run_tmux(&["kill-pane", "-t", parts[0]]);
+                if let Err(error) = close_sidebar(parts[0]) {
+                    eprintln!("cannot close sidebar: {error}");
+                    return 1;
+                }
             }
         }
     } else {
@@ -171,6 +174,30 @@ pub(crate) fn cmd_toggle_all(_args: &[String]) -> i32 {
     }
 
     0
+}
+
+#[cfg(windows)]
+fn close_sidebar(pane: &str) -> Result<(), String> {
+    tmux::set_pane_option(pane, tmux::SIDEBAR_CLOSE_REQUEST, "1");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let panes = tmux::run_tmux(&["list-panes", "-a", "-F", "#{pane_id}"])
+            .ok_or("cannot list panes while waiting for sidebar exit")?;
+        if !panes.lines().any(|id| id == pane) {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(format!(
+                "sidebar {pane} did not exit after its close request"
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+#[cfg(not(windows))]
+fn close_sidebar(pane: &str) -> Result<(), String> {
+    tmux::run_tmux_capture(&["kill-pane", "-t", pane]).map(|_| ())
 }
 
 fn any_sidebar_pane(output: &str) -> bool {
