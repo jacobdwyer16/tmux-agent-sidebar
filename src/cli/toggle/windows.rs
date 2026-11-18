@@ -1,6 +1,6 @@
 use crate::tmux;
 
-use super::SidebarPosition;
+use super::{SidebarPosition, configured_width};
 
 pub(crate) fn maintain_sidebar_width(pane: &str) -> Result<(), String> {
     let geometry = tmux::run_tmux_capture(&[
@@ -44,35 +44,6 @@ pub(crate) fn maintain_sidebar_width(pane: &str) -> Result<(), String> {
     };
     let restored = restore_sidebar_width(layout, target, position, pane)?;
     tmux::run_tmux_capture(&["select-layout", "-t", window, &restored]).map(|_| ())
-}
-
-fn configured_width(setting: &str, window_width: u32) -> Result<u32, String> {
-    let setting = if setting.is_empty() { "30" } else { setting };
-    let (number, percentage) = match setting.strip_suffix('%') {
-        Some(number) => (number, true),
-        None => (setting, false),
-    };
-    let value = number
-        .parse::<u32>()
-        .map_err(|error| format!("invalid configured width: {error}"))?;
-    let width = if percentage {
-        window_width
-            .checked_mul(value)
-            .ok_or("sidebar percentage overflow")?
-            / 100
-    } else {
-        value
-    }
-    .max(1);
-    if window_width
-        .checked_sub(width)
-        .is_none_or(|remaining| remaining <= 2)
-    {
-        return Err(format!(
-            "sidebar width {width} does not fit window width {window_width}"
-        ));
-    }
-    Ok(width)
 }
 
 fn restore_sidebar_width(
@@ -175,16 +146,13 @@ fn checksummed_layout(body: &str) -> String {
 
 pub(super) fn create_sidebar(
     window: &str,
-    width: &str,
+    width: u32,
     position: SidebarPosition,
     geometry: &str,
     directory: &str,
     binary: &str,
 ) -> Result<String, String> {
     let original = tmux::display_message(window, "#{window_layout}");
-    let width = width
-        .parse::<u32>()
-        .map_err(|error| format!("invalid sidebar width: {error}"))?;
     let layout = sidebar_layout(&original, width, position)?;
     // psmux consumes layout leaves in tree order and ignores pane ids.
     let original_panes: Vec<&str> = geometry
@@ -276,16 +244,6 @@ fn sidebar_layout(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn configured_width_supports_columns_and_percentages() {
-        assert_eq!(configured_width("42", 187), Ok(42));
-        assert_eq!(configured_width("15%", 187), Ok(28));
-        assert_eq!(configured_width("", 187), Ok(30));
-        for setting in ["wide", "100%", "200", "4294967295%"] {
-            assert!(configured_width(setting, 187).is_err());
-        }
-    }
 
     #[test]
     fn closing_a_main_pane_restores_the_left_sidebar_without_reordering_panes() {

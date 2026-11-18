@@ -121,81 +121,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_git_poll_skips_when_inactive() {
-        let active = Arc::new(AtomicBool::new(false));
-        let (tx, rx) = mpsc::channel::<GitData>();
-
-        let flag = Arc::clone(&active);
-        let handle = std::thread::spawn(move || {
-            // Simulate the poll loop check without actually sleeping 2s
-            for _ in 0..3 {
-                if !flag.load(Ordering::Relaxed) {
-                    continue;
-                }
-                let _ = tx.send(GitData::default());
-            }
+    fn git_worker_stops_when_its_target_channel_closes() {
+        let (targets, requests) = mpsc::channel();
+        let (updates, results) = mpsc::channel();
+        let (done, completed) = mpsc::channel();
+        drop(targets);
+        let worker = std::thread::spawn(move || {
+            git_poll_loop(&updates, &AtomicBool::new(true), requests);
+            done.send(()).expect("worker completion");
         });
-
-        handle.join().unwrap();
-        // No data should have been sent since active=false
-        assert!(
-            rx.try_recv().is_err(),
-            "should not poll when git tab is inactive"
-        );
-    }
-
-    #[test]
-    fn test_git_poll_sends_when_active() {
-        let active = Arc::new(AtomicBool::new(true));
-        let (tx, rx) = mpsc::channel::<GitData>();
-
-        let flag = Arc::clone(&active);
-        let handle = std::thread::spawn(move || {
-            // active=true, so it should send
-            if flag.load(Ordering::Relaxed) {
-                let _ = tx.send(GitData::default());
-            }
-        });
-
-        handle.join().unwrap();
-        assert!(rx.try_recv().is_ok(), "should poll when git tab is active");
-    }
-
-    #[test]
-    fn test_git_poll_reacts_to_flag_change() {
-        let active = Arc::new(AtomicBool::new(false));
-        let (tx, rx) = mpsc::channel::<GitData>();
-
-        // Initially inactive
-        assert!(!active.load(Ordering::Relaxed));
-
-        // Switch to active
-        active.store(true, Ordering::Relaxed);
-
-        let flag = Arc::clone(&active);
-        let handle = std::thread::spawn(move || {
-            if flag.load(Ordering::Relaxed) {
-                let _ = tx.send(GitData::default());
-            }
-        });
-
-        handle.join().unwrap();
-        assert!(
-            rx.try_recv().is_ok(),
-            "should poll after flag switches to active"
-        );
-    }
-
-    #[test]
-    fn test_git_poll_stops_on_sender_closed() {
-        let active = AtomicBool::new(true);
-        let (tx, rx) = mpsc::channel::<GitData>();
-        drop(rx); // Close receiver
-
-        let result = tx.send(GitData::default());
-        assert!(result.is_err(), "send should fail when receiver is dropped");
-
-        // Verify the flag check pattern used in git_poll_loop
-        assert!(active.load(Ordering::Relaxed));
+        completed
+            .recv_timeout(Duration::from_secs(1))
+            .expect("worker must stop when the UI closes");
+        worker.join().expect("worker exited without panicking");
+        assert!(matches!(
+            results.try_recv(),
+            Err(mpsc::TryRecvError::Disconnected)
+        ));
     }
 }

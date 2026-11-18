@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Instant;
 
+use crate::activity::ActivityEntry;
 use crate::group::RepoGroup;
-use crate::state::{ActivityState, AppState, PaneRuntimeMap};
+use crate::state::{AppState, PaneRuntimeMap};
 use crate::tmux;
 
 pub(super) struct Request {
@@ -18,7 +19,7 @@ pub(super) struct Snapshot {
     now: u64,
     groups: Vec<RepoGroup>,
     panes: PaneRuntimeMap,
-    activity: ActivityState,
+    activity: Vec<ActivityEntry>,
     focused_pane: Option<String>,
     sidebar_focused: bool,
     pub window_active: bool,
@@ -39,7 +40,7 @@ impl Snapshot {
             now: state.now,
             groups: state.repo_groups.clone(),
             panes: state.pane_states.clone(),
-            activity: state.activity.clone(),
+            activity: state.activity.entries.clone(),
             focused_pane: state.focus_state.focused_pane_id.clone(),
             sidebar_focused: state.focus_state.sidebar_focused,
             window_active,
@@ -72,7 +73,7 @@ impl Snapshot {
                 .clone_from(&self.focused_pane);
         }
         if self.focused_pane == state.focus_state.focused_pane_id {
-            state.activity.entries = self.activity.entries;
+            state.activity.entries = self.activity;
         }
         if let Some(flash) = self.flash {
             state.flash = Some(flash);
@@ -149,7 +150,7 @@ mod tests {
             now: state.now,
             groups: state.repo_groups.clone(),
             panes: state.pane_states.clone(),
-            activity: state.activity.clone(),
+            activity: state.activity.entries.clone(),
             focused_pane: state.focus_state.focused_pane_id.clone(),
             sidebar_focused: false,
             window_active: true,

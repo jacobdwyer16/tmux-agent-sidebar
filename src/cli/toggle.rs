@@ -7,6 +7,35 @@ mod windows;
 #[cfg(windows)]
 pub(crate) use windows::maintain_sidebar_width;
 
+fn configured_width(setting: &str, window_width: u32) -> Result<u32, String> {
+    let setting = if setting.is_empty() { "30" } else { setting };
+    let (number, percentage) = match setting.strip_suffix('%') {
+        Some(number) => (number, true),
+        None => (setting, false),
+    };
+    let value = number
+        .parse::<u32>()
+        .map_err(|error| format!("invalid configured width: {error}"))?;
+    let width = if percentage {
+        window_width
+            .checked_mul(value)
+            .ok_or("sidebar percentage overflow")?
+            / 100
+    } else {
+        value
+    }
+    .max(1);
+    if window_width
+        .checked_sub(width)
+        .is_none_or(|remaining| remaining <= 2)
+    {
+        return Err(format!(
+            "sidebar width {width} does not fit window width {window_width}"
+        ));
+    }
+    Ok(width)
+}
+
 pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
     let mut create_only = false;
     let mut positional = Vec::new();
@@ -24,39 +53,6 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
         None => return 0,
     };
     let pane_path = positional.get(1).copied().unwrap_or("~");
-
-    // Check sidebar width setting
-    let sidebar_width_setting = {
-        let s = tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_WIDTH));
-        if s.is_empty() { "30".to_string() } else { s }
-    };
-
-    let sidebar_width = if sidebar_width_setting.ends_with('%') {
-        let window_width: u32 = tmux::display_message(window_id, "#{window_width}")
-            .parse()
-            .unwrap_or(0);
-        let pct: u32 = sidebar_width_setting
-            .trim_end_matches('%')
-            .parse()
-            .unwrap_or(15);
-        if window_width > 0 && pct > 0 {
-            let w = window_width * pct / 100;
-            if w < 1 {
-                "1".to_string()
-            } else {
-                w.to_string()
-            }
-        } else {
-            sidebar_width_setting
-        }
-    } else {
-        sidebar_width_setting
-    };
-
-    let sidebar_position = SidebarPosition::from_setting(&tmux::display_message(
-        window_id,
-        &format!("#{{{}}}", tmux::SIDEBAR_POSITION),
-    ));
 
     // Check for existing sidebar
     let pane_id_role_format = pane_id_role_format();
@@ -88,6 +84,37 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
         return 0;
     }
 
+    let settings = match tmux::run_tmux_capture(&[
+        "display-message",
+        "-t",
+        window_id,
+        "-p",
+        "#{window_width}|#{@sidebar_width}|#{@sidebar_position}",
+    ]) {
+        Ok(settings) => settings,
+        Err(error) => {
+            eprintln!("cannot read sidebar settings: {error}");
+            return 1;
+        }
+    };
+    let fields: Vec<&str> = settings.split('|').collect();
+    let [window_width, setting, position] = fields.as_slice() else {
+        eprintln!("invalid sidebar settings: {settings}");
+        return 1;
+    };
+    let sidebar_width = match window_width
+        .parse::<u32>()
+        .map_err(|error| format!("invalid window width: {error}"))
+        .and_then(|width| configured_width(setting, width))
+    {
+        Ok(width) => width,
+        Err(error) => {
+            eprintln!("cannot create sidebar: {error}");
+            return 1;
+        }
+    };
+    let sidebar_position = SidebarPosition::from_setting(position);
+
     let pane_geometry_output = tmux::run_tmux(&[
         "list-panes",
         "-t",
@@ -116,7 +143,7 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
     #[cfg(windows)]
     let sidebar_pane = match windows::create_sidebar(
         window_id,
-        &sidebar_width,
+        sidebar_width,
         sidebar_position,
         &pane_geometry_output,
         pane_path,
@@ -133,7 +160,7 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
         "split-window",
         split_flags,
         "-l",
-        &sidebar_width,
+        &sidebar_width.to_string(),
         "-t",
         &target_pane,
         "-c",
@@ -421,6 +448,16 @@ fn pane_id_role_format() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn configured_width_supports_columns_and_percentages() {
+        assert_eq!(configured_width("42", 187), Ok(42));
+        assert_eq!(configured_width("15%", 187), Ok(28));
+        assert_eq!(configured_width("", 187), Ok(30));
+        for setting in ["wide", "100%", "200", "4294967295%"] {
+            assert!(configured_width(setting, 187).is_err());
+        }
+    }
 
     #[test]
     fn any_sidebar_pane_detects_sidebar_anywhere() {

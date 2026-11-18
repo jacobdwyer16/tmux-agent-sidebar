@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use crate::state::{GlobalWriteRequest, PaneActivation};
 use crate::tmux;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(super) enum Action {
     Activate(PaneActivation),
     Persist(GlobalWriteRequest),
