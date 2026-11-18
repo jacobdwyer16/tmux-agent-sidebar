@@ -500,13 +500,24 @@ fn pane_output_needs_process_snapshot(all_panes_output: &str) -> bool {
 }
 
 fn has_sidebar_role(parts: &[String]) -> bool {
-    parts
-        .get(pane_line_field::PANE_ROLE)
-        .is_some_and(|role| role == "sidebar")
-        && (!cfg!(windows)
-            || parts.get(pane_line_field::SIDEBAR_PID).is_none_or(|owner| {
-                owner.is_empty() || parts.get(pane_line_field::PANE_PID) == Some(owner)
-            }))
+    sidebar_role_is_current(
+        parts
+            .get(pane_line_field::PANE_ROLE)
+            .map(String::as_str)
+            .unwrap_or_default(),
+        parts
+            .get(pane_line_field::SIDEBAR_PID)
+            .map(String::as_str)
+            .unwrap_or_default(),
+        parts
+            .get(pane_line_field::PANE_PID)
+            .map(String::as_str)
+            .unwrap_or_default(),
+    )
+}
+
+pub(crate) fn sidebar_role_is_current(role: &str, owner: &str, pane_pid: &str) -> bool {
+    role == "sidebar" && (!cfg!(windows) || owner.is_empty() || owner == pane_pid)
 }
 
 fn apply_codex_permission_modes(

@@ -61,19 +61,20 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
     let panes_output = tmux::run_tmux(&["list-panes", "-t", window_id, "-F", &pane_id_role_format])
         .unwrap_or_default();
 
-    let existing_sidebar = panes_output.lines().find_map(|line| {
-        let (pane, role) = line.split_once('|')?;
-        (role == "sidebar").then(|| pane.to_string())
-    });
+    let existing_sidebar = panes_output
+        .lines()
+        .filter_map(parse_pane_role)
+        .find_map(|(pane, sidebar)| sidebar.then(|| pane.to_string()));
 
     if let Some(sidebar_pane) = existing_sidebar {
         if create_only {
             return 0;
         }
-        if let Some(target) = panes_output.lines().find_map(|line| {
-            let (pane, role) = line.split_once('|')?;
-            (role != "sidebar").then_some(pane)
-        }) && let Err(error) = tmux::run_tmux_capture(&["select-pane", "-t", target])
+        if let Some(target) = panes_output
+            .lines()
+            .filter_map(parse_pane_role)
+            .find_map(|(pane, sidebar)| (!sidebar).then_some(pane))
+            && let Err(error) = tmux::run_tmux_capture(&["select-pane", "-t", target])
         {
             eprintln!("cannot focus terminal before closing sidebar: {error}");
             return 1;
@@ -164,10 +165,8 @@ pub(crate) fn cmd_toggle_all(_args: &[String]) -> i32 {
         return 1;
     };
     if any_sidebar_pane(&all_panes) {
-        for line in all_panes.lines() {
-            if let Some((pane, "sidebar")) = line.split_once('|')
-                && let Err(error) = close_sidebar(pane)
-            {
+        for (pane, sidebar) in all_panes.lines().filter_map(parse_pane_role) {
+            if sidebar && let Err(error) = close_sidebar(pane) {
                 eprintln!("cannot close sidebar: {error}");
                 return 1;
             }
@@ -214,10 +213,19 @@ fn close_sidebar(pane: &str) -> Result<(), String> {
 }
 
 fn any_sidebar_pane(output: &str) -> bool {
-    output.lines().any(|line| {
-        let parts: Vec<&str> = line.splitn(2, '|').collect();
-        parts.len() >= 2 && parts[1] == "sidebar"
-    })
+    output
+        .lines()
+        .filter_map(parse_pane_role)
+        .any(|(_, sidebar)| sidebar)
+}
+
+fn parse_pane_role(line: &str) -> Option<(&str, bool)> {
+    let mut fields = line.split('|');
+    let pane = fields.next()?;
+    let role = fields.next()?;
+    let owner = fields.next().unwrap_or_default();
+    let pane_pid = fields.next().unwrap_or_default();
+    Some((pane, tmux::sidebar_role_is_current(role, owner, pane_pid)))
 }
 
 fn unique_window_paths(output: &str) -> Vec<(String, String)> {
@@ -336,8 +344,10 @@ fn should_kill_window(
         return false;
     }
 
-    let non_sidebar = output.lines().filter(|line| *line != "sidebar").count();
-    if non_sidebar != 0 {
+    if output
+        .lines()
+        .any(|line| !matches!(parse_pane_role(line), Some((_, true))))
+    {
         return false;
     }
 
@@ -365,7 +375,7 @@ pub(crate) fn cmd_auto_close(args: &[String]) -> i32 {
         None => return 0,
     };
 
-    let pane_role_format = format!("#{{{}}}", tmux::PANE_ROLE);
+    let pane_role_format = pane_id_role_format();
     let list_panes_output =
         tmux::run_tmux(&["list-panes", "-t", window_id, "-F", &pane_role_format]);
 
@@ -399,7 +409,11 @@ pub(crate) fn cmd_auto_close(args: &[String]) -> i32 {
 }
 
 fn pane_id_role_format() -> String {
-    format!("#{{pane_id}}|#{{{}}}", tmux::PANE_ROLE)
+    format!(
+        "#{{pane_id}}|#{{{}}}|#{{{}}}|#{{pane_pid}}",
+        tmux::PANE_ROLE,
+        tmux::SIDEBAR_PID
+    )
 }
 
 #[cfg(test)]
@@ -416,6 +430,29 @@ mod tests {
     fn any_sidebar_pane_returns_false_without_sidebar() {
         let output = "%1|pane\n%2|main";
         assert!(!any_sidebar_pane(output));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn toggle_ignores_sidebar_markers_owned_by_a_previous_process() {
+        assert_eq!(
+            parse_pane_role("eia:@1.%9|sidebar|17508|49960"),
+            Some(("eia:@1.%9", false))
+        );
+        assert!(!any_sidebar_pane("eia:@1.%9|sidebar|17508|49960"));
+        assert!(any_sidebar_pane(
+            "eia:@1.%9|sidebar|17508|49960\neia:@1.%15|sidebar|29212|29212"
+        ));
+        assert!(!should_kill_window(
+            Some("eia:@1.%9|sidebar|17508|49960"),
+            Some(2),
+            Some(1)
+        ));
+        assert!(should_kill_window(
+            Some("eia:@1.%15|sidebar|29212|29212"),
+            Some(2),
+            Some(1)
+        ));
     }
 
     #[test]
@@ -504,23 +541,31 @@ mod tests {
         // other windows to fall back on. Attached-client count is
         // irrelevant because killing this window does not end the
         // session.
-        assert!(should_kill_window(Some("sidebar"), Some(2), None));
-        assert!(should_kill_window(Some("sidebar"), Some(2), Some(0)));
-        assert!(should_kill_window(Some("sidebar"), Some(2), Some(5)));
+        assert!(should_kill_window(Some("%1|sidebar"), Some(2), None));
+        assert!(should_kill_window(Some("%1|sidebar"), Some(2), Some(0)));
+        assert!(should_kill_window(Some("%1|sidebar"), Some(2), Some(5)));
     }
 
     #[test]
     fn should_kill_window_skips_when_non_sidebar_pane_remains() {
         // Another pane with `@pane_role` explicitly set to something
         // non-sidebar (e.g. a spawn-marked pane) keeps the window alive.
-        assert!(!should_kill_window(Some("sidebar\npane"), Some(5), Some(1)));
-        // `@pane_role` unset renders as an empty line — that pane is
-        // a regular user pane, not a sidebar, so the window must stay.
-        // The real tmux output for [sidebar pane, regular pane] is
-        // "sidebar\n\n" (sidebar's role, then the regular pane's empty
-        // role followed by the final record separator).
-        assert!(!should_kill_window(Some("sidebar\n\n"), Some(5), Some(1)));
-        assert!(!should_kill_window(Some("\nsidebar\n"), Some(5), Some(1)));
+        assert!(!should_kill_window(
+            Some("%1|sidebar\n%2|pane"),
+            Some(5),
+            Some(1)
+        ));
+        // an unset role still identifies a regular pane that keeps the window alive.
+        assert!(!should_kill_window(
+            Some("%1|sidebar\n%2|\n"),
+            Some(5),
+            Some(1)
+        ));
+        assert!(!should_kill_window(
+            Some("%2|\n%1|sidebar\n"),
+            Some(5),
+            Some(1)
+        ));
     }
 
     #[test]
@@ -544,14 +589,14 @@ mod tests {
         // the session only detaches the same client that just kept the
         // session alive, which matches tmux's standard `exit` behaviour
         // on the last pane — the user expects the sidebar to go with it.
-        assert!(should_kill_window(Some("sidebar"), Some(1), Some(1)));
+        assert!(should_kill_window(Some("%1|sidebar"), Some(1), Some(1)));
     }
 
     #[test]
     fn should_kill_window_kills_last_window_when_detached() {
         // No clients attached: killing the session harms no one, and
         // a stranded sidebar in a detached session is pointless anyway.
-        assert!(should_kill_window(Some("sidebar"), Some(1), Some(0)));
+        assert!(should_kill_window(Some("%1|sidebar"), Some(1), Some(0)));
     }
 
     #[test]
@@ -561,8 +606,8 @@ mod tests {
         // tabs sharing a single `main` session, that manifested as every
         // tab dying at once. Keep the sidebar stranded rather than nuke
         // the session.
-        assert!(!should_kill_window(Some("sidebar"), Some(1), Some(2)));
-        assert!(!should_kill_window(Some("sidebar"), Some(1), Some(7)));
+        assert!(!should_kill_window(Some("%1|sidebar"), Some(1), Some(2)));
+        assert!(!should_kill_window(Some("%1|sidebar"), Some(1), Some(7)));
     }
 
     #[test]
@@ -570,7 +615,7 @@ mod tests {
         // Without knowing how many clients are attached we cannot prove
         // the kill is safe. Better a lingering sidebar pane than a
         // mass-disconnect.
-        assert!(!should_kill_window(Some("sidebar"), Some(1), None));
+        assert!(!should_kill_window(Some("%1|sidebar"), Some(1), None));
     }
 
     #[test]
@@ -578,7 +623,7 @@ mod tests {
         // If we cannot prove the session has other windows, err on the
         // side of preservation. Better to leave a lingering sidebar
         // pane than to destroy a live workspace.
-        assert!(!should_kill_window(Some("sidebar"), None, Some(1)));
-        assert!(!should_kill_window(Some("sidebar"), Some(0), Some(1)));
+        assert!(!should_kill_window(Some("%1|sidebar"), None, Some(1)));
+        assert!(!should_kill_window(Some("%1|sidebar"), Some(0), Some(1)));
     }
 }

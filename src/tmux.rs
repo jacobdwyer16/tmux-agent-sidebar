@@ -8,6 +8,7 @@ mod windows;
 
 pub(crate) use options::sync_project_identity;
 pub(crate) use query::clear_agent_pane_state;
+pub(crate) use query::sidebar_role_is_current;
 
 pub use options::SIDEBAR_CLOSE_REQUEST;
 
