@@ -140,6 +140,8 @@ The installed executable is `bin/tmux-agent-sidebar.exe`.
   without adding a sidebar or changing its window layout. `h` returns to the
   previously focused terminal. `r` opens the repo picker;
   Tab cycles status filters. Mouse targets follow the evenly spaced status icons.
+- The status bar sits directly above the agent list, with no information or
+  repository dropdown row. The repository picker remains available with `r`.
 - Up/Down also visit each agent in order. Windows key-release events are ignored
   so one tap moves one row. Existing prefix + arrow pane bindings still work.
 - Models appear in muted red and stable session names in pastel yellow. Permission

@@ -115,8 +115,8 @@ fn snapshot_git_status_tab_ui() {
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
+    ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
     │feature/sidebar       ↑2↓1│
     │+42/-15            3 files│
@@ -154,8 +154,8 @@ fn snapshot_git_clean_ui() {
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
+    ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
     │    Working tree clean    │
     ╰──────────────────────────╯
@@ -190,8 +190,8 @@ fn snapshot_activity_tab_active_ui() {
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
+    ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
     │10:32                 Edit│
     │  src/main.rs             │
@@ -229,8 +229,8 @@ fn activity_tab_leaves_one_blank_row_above_entries() {
     // one row further down.
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
+    ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
     │10:32                 Edit│
     │  src/main.rs             │
@@ -355,8 +355,8 @@ fn snapshot_git_full_info_ui() {
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
+    ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
     │main                      │
     │+120/-30           3 files│
@@ -529,8 +529,8 @@ fn snapshot_git_long_filename_truncated_ui() {
     let plain = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(plain, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
+    ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
     │main                      │
     │                   2 files│
@@ -618,7 +618,6 @@ fn snapshot_git_more_than_5_files() {
     let plain = render_to_string(&mut state, 28, 40);
     insta::assert_snapshot!(plain, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
     ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
@@ -645,7 +644,6 @@ fn snapshot_git_more_than_5_files() {
     let scrolled = render_to_string(&mut state, 28, 40);
     insta::assert_snapshot!(scrolled, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
     ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
@@ -816,7 +814,6 @@ fn snapshot_subagents_tree_ui() {
     let output = render_to_string(&mut state, 40, 28);
     insta::assert_snapshot!(output, @"
      ≡ 1    ● 1    ◎ 0    ◐ 0    ○ 0    ✕ 0
-    ⓘ                                    — ▾
     project
     ┃ ● model pending claude
         ├ Explore #1
@@ -853,7 +850,6 @@ fn snapshot_subagent_long_name_truncated_ui() {
     let output = render_to_string(&mut state, 28, 27);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
     ┃ ● model pending claude
         ├ superpowers:code-revi…
@@ -889,7 +885,6 @@ fn snapshot_activity_empty_centered_ui() {
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 0  ◎ 0  ◐ 0 ○ 1 ✕ 0
-    ⓘ                        — ▾
     project
     ┃ ○ model pending claude
         Waiting for prompt…
@@ -920,7 +915,6 @@ fn snapshot_git_clean_centered_ui() {
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 0  ◎ 0  ◐ 0 ○ 1 ✕ 0
-    ⓘ                        — ▾
     project
     ┃ ○ model pending claude
         Waiting for prompt…
@@ -960,8 +954,8 @@ fn snapshot_git_branch_loaded_no_changes_shows_inline_clean() {
     let plain = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(plain, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
+    ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
     │main                      │
     │──────────────────────────│
@@ -995,8 +989,8 @@ fn snapshot_git_no_data_shows_centered_clean() {
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
+    ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
     │    Working tree clean    │
     ╰──────────────────────────╯
@@ -1173,7 +1167,6 @@ fn snapshot_branch_truncated_ui() {
     let plain = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(plain, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     dotfiles                   +
     ┃ ● model pending claude
     ┃   feature/tmux-sidebar-da…
@@ -1233,7 +1226,6 @@ fn snapshot_git_staged_unstaged_untracked_ui() {
     let output = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
     ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
@@ -1284,8 +1276,8 @@ fn snapshot_git_long_branch_with_pr_ui() {
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
+    ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
     │feature/very-long-br… #123│
     │+5/-2              1 files│
@@ -1329,8 +1321,8 @@ fn snapshot_git_staged_only_ui() {
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
+    ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
     │main                      │
     │+20/-0             1 files│
@@ -1374,7 +1366,6 @@ fn snapshot_git_many_files_more_indicator_ui() {
     let output = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
     ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
@@ -1427,7 +1418,6 @@ fn snapshot_git_more_than_10_files_ui() {
     let output = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(output, @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
     ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
@@ -1494,13 +1484,13 @@ fn snapshot_focused_group_active_border_styled() {
     // the active pane marker and the active bottom-panel border.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 30), @"
      ≡[fg:111] 2[fg:255]  ●[fg:245] 1[fg:255]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 1[fg:255] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     d[fg:153]o[fg:153]t[fg:153]f[fg:153]i[fg:153]l[fg:153]e[fg:153]s[fg:153]
     ┃[fg:153,bg:239] [bg:239]●[fg:82,bg:239] [bg:239]m[bg:239]o[bg:239]d[bg:239]e[bg:239]l[bg:239] [bg:239]p[bg:239]e[bg:239]n[bg:239]d[bg:239]i[bg:239]n[bg:239]g[bg:239] [bg:239]c[bg:239]l[bg:239]a[bg:239]u[bg:239]d[bg:239]e[bg:239] [bg:239] [bg:239] [bg:239] [bg:239]
 
     m[fg:255]y[fg:255]-[fg:255]a[fg:255]p[fg:255]p[fg:255]
       ○[fg:110] model pending codex
        [fg:244] [fg:244]W[fg:244]a[fg:244]i[fg:244]t[fg:244]i[fg:244]n[fg:244]g[fg:244] [fg:244]f[fg:244]o[fg:244]r[fg:244] [fg:244]p[fg:244]r[fg:244]o[fg:244]m[fg:244]p[fg:244]t[fg:244]…[fg:244]
+
 
 
     ╭[fg:240] [fg:240]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153] [fg:240]│[fg:240] [fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╮[fg:240]
@@ -1546,7 +1536,6 @@ fn test_pet_enabled_preserves_bottom_panel_border() {
 
     insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
      ≡ 1    ● 0    ◎ 0    ◐ 0    ○ 1    ✕ 0
-    ⓘ                                    — ▾
     project
     ┃ ○ model pending claude
         Waiting for prompt…

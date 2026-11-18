@@ -3,15 +3,9 @@ use std::time::Instant;
 use super::AppState;
 use crate::cli::plugin_state::ClaudePluginStatus;
 
-/// Sub-state for the ⓘ notices popup, lifted out of [`AppState`] so its
-/// seven related fields (button column, missing-hook groups, plugin
-/// status, legacy hook flag, plugin notice, copy targets, copy feedback)
-/// travel as a single unit.
+/// Notices content and copy feedback.
 #[derive(Debug, Clone, Default)]
 pub struct NoticesState {
-    /// Column of the ⓘ button in the secondary header, or `None` when the
-    /// button is hidden. Used for click hit-testing.
-    pub button_col: Option<u16>,
     /// Missing hooks grouped per agent, shown in the "Missing hooks"
     /// section of the popup.
     pub missing_hook_groups: Vec<NoticesMissingHookGroup>,

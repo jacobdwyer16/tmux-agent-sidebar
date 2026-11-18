@@ -221,7 +221,7 @@ fn test_line_to_row_with_version_banner() {
 }
 
 #[test]
-fn test_secondary_header_click_on_i_opens_notices_popup_even_without_missing_hooks() {
+fn clicks_below_status_bar_target_the_agent_list() {
     let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
@@ -234,21 +234,26 @@ fn test_secondary_header_click_on_i_opens_notices_popup_even_without_missing_hoo
         }],
     }]);
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
-    // make_state() seeds a missing hook group for general-purpose
-    // tests; clear it here so the test actually exercises the
-    // version-notice-only path described in the test name.
     state.notices.missing_hook_groups.clear();
     state.version_notice = Some(tmux_agent_sidebar::version::UpdateNotice {
         local_version: "0.2.6".into(),
         latest_version: "0.2.7".into(),
     });
     state.rebuild_row_targets();
-    let _ = render_to_string(&mut state, 28, 10);
+    state.layout.line_to_row = vec![None, Some(0)];
 
     state.handle_mouse_click(1, 0);
-    assert!(
-        state.is_notices_popup_open(),
-        "i should stay clickable even when there are no missing hooks"
+    assert!(!state.is_notices_popup_open());
+    assert!(!state.is_repo_popup_open());
+    assert!(state.focus_state.pending_activation.is_none());
+    state.handle_mouse_click(2, 0);
+    assert_eq!(
+        state
+            .focus_state
+            .pending_activation
+            .expect("agent clicked")
+            .pane_id,
+        "%1"
     );
 }
 

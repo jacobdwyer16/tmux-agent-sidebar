@@ -50,9 +50,6 @@ pub struct FrameLayout {
     /// `pane_row_targets`. `None` for header/blank lines that should not
     /// route clicks to a pane.
     pub line_to_row: Vec<Option<usize>>,
-    /// X column of the repo filter button in the secondary header. `None`
-    /// when the button is hidden. Used for click hit-testing.
-    pub repo_button_col: Option<u16>,
     /// Click regions for the `[+]` spawn button rendered at the right
     /// edge of each repo-group header. One entry per visible repo group.
     pub repo_spawn_targets: Vec<RepoSpawnTarget>,
@@ -142,26 +139,6 @@ impl AppState {
             }
         }
     }
-    /// Handle mouse click on the secondary header row (row 1).
-    /// The repo filter button lives on the far right of this row.
-    pub fn handle_secondary_header_click(&mut self, col: u16) {
-        if self
-            .notices
-            .button_col
-            .is_some_and(|notices_col| col == notices_col)
-        {
-            self.toggle_notices_popup();
-            return;
-        }
-        if self
-            .layout
-            .repo_button_col
-            .is_some_and(|repo_button_col| col >= repo_button_col)
-        {
-            self.toggle_repo_popup();
-        }
-    }
-
     /// Handle mouse click in agents panel. Maps screen row to agent row
     /// via line_to_row (adjusted for scroll offset) and activates that pane.
     /// Row 0 is the fixed filter bar, row 1+ maps to the scrollable agent list.
@@ -222,10 +199,6 @@ impl AppState {
             self.handle_filter_click(col);
             return;
         }
-        if row == 1 {
-            self.handle_secondary_header_click(col);
-            return;
-        }
 
         // Check the `+` spawn buttons before the pane-row fallback so a
         // click on the button doesn't also shift the pane selection.
@@ -252,7 +225,7 @@ impl AppState {
             return;
         }
 
-        let line_index = (row as usize - 2) + self.scrolls.panes.offset;
+        let line_index = (row as usize - 1) + self.scrolls.panes.offset;
         if let Some(Some(agent_row)) = self.layout.line_to_row.get(line_index) {
             self.global.selected_pane_row = *agent_row;
             self.global.queue_cursor_save();

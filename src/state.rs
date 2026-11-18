@@ -52,7 +52,7 @@ pub struct AppState {
     pub flash: Option<(String, Instant)>,
     pub spinner_frame: usize,
     /// Frame-scoped render output (pane_row_targets, line_to_row,
-    /// repo_button_col, hyperlink_overlays). Rewritten every frame by
+    /// hyperlink_overlays). Rewritten every frame by
     /// the UI layer; consumed by mouse/keyboard handlers before the
     /// next render.
     pub layout: FrameLayout,
@@ -1236,11 +1236,10 @@ mod tests {
         state.layout.line_to_row = vec![None, Some(0), Some(1)];
         state.scrolls.panes.offset = 0;
 
-        // row 0 = filter bar, row 1 = secondary header, row 2+ = agent list rows
-        state.handle_mouse_click(3, 5); // row 3 → line_index = (3-2) = 1 → agent row 0
+        state.handle_mouse_click(2, 5);
         assert_eq!(state.global.selected_pane_row, 0);
 
-        state.handle_mouse_click(4, 5); // row 4 → line_index = (4-2) = 2 → agent row 1
+        state.handle_mouse_click(3, 5);
         assert_eq!(state.global.selected_pane_row, 1);
     }
 
@@ -1273,7 +1272,7 @@ mod tests {
     }
 
     #[test]
-    fn mouse_click_on_secondary_header_toggles_repo_popup() {
+    fn former_repo_dropdown_coordinates_do_not_open_popup() {
         let mut state = AppState::new("%99".into());
         state.repo_groups = vec![
             RepoGroup {
@@ -1287,13 +1286,12 @@ mod tests {
                 panes: vec![(test_pane("%2"), PaneGitInfo::default())],
             },
         ];
-        state.layout.repo_button_col = Some(20);
 
         state.handle_mouse_click(1, 19);
         assert!(!state.is_repo_popup_open());
 
         state.handle_mouse_click(1, 20);
-        assert!(state.is_repo_popup_open());
+        assert!(!state.is_repo_popup_open());
     }
 
     #[test]
@@ -1378,8 +1376,7 @@ mod tests {
         state.layout.line_to_row = vec![None, Some(0), Some(0), None, Some(1)];
         state.scrolls.panes.offset = 2;
 
-        // row 4 → line_index = (4-2) + 2 = 4 → agent row 1
-        state.handle_mouse_click(4, 5);
+        state.handle_mouse_click(3, 5);
         assert_eq!(state.global.selected_pane_row, 1);
     }
 

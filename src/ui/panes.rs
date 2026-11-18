@@ -51,7 +51,6 @@ fn anchor_below(area: Rect, anchor_y: u16, desired_width: u16, desired_height: u
 
 struct PaneLayout {
     filter_area: Rect,
-    secondary_area: Rect,
     list_area: Rect,
 }
 
@@ -63,21 +62,14 @@ impl PaneLayout {
             width: area.width,
             height: 1.min(area.height),
         };
-        let secondary_area = Rect {
-            x: area.x,
-            y: area.y + 1,
-            width: area.width,
-            height: 1.min(area.height.saturating_sub(1)),
-        };
         let list_area = Rect {
             x: area.x,
-            y: area.y + 2,
+            y: area.y + filter_area.height,
             width: area.width,
-            height: area.height.saturating_sub(2),
+            height: area.height.saturating_sub(filter_area.height),
         };
         Self {
             filter_area,
-            secondary_area,
             list_area,
         }
     }
@@ -355,11 +347,11 @@ pub(super) fn render_repo_popup(frame: &mut Frame, state: &mut AppState, area: R
     let max_name_len = repos.iter().map(|r| display_width(r)).max().unwrap_or(3);
     // Width: padding(1 left + 1 right) + name + borders(2)
     let popup_width = (max_name_len + 4).min(area.width as usize).max(10) as u16;
-    let popup_height = (repos.len() as u16 + 2).min(area.height.saturating_sub(2)); // +2 for borders
+    let popup_height = (repos.len() as u16 + 2).min(area.height.saturating_sub(1)); // +2 for borders
 
-    // Right-aligned, below the 2-row header
+    // align the picker below the status bar.
     let popup_x = area.x + area.width.saturating_sub(popup_width);
-    let popup_y = area.y + 2;
+    let popup_y = area.y + 1;
 
     let popup_rect = Rect::new(popup_x, popup_y, popup_width, popup_height);
     state.popup.set_repo_area(Some(popup_rect));
@@ -413,14 +405,6 @@ pub(super) fn render_repo_popup(frame: &mut Frame, state: &mut AppState, area: R
 fn render_filter_bar_into(frame: &mut Frame, state: &mut AppState, area: Rect) {
     let (line, targets) = filter_bar::render_filter_bar(state, area.width);
     state.layout.status_filter_targets = targets;
-    frame.render_widget(Paragraph::new(vec![line]), area);
-}
-
-fn render_secondary_header_into(frame: &mut Frame, state: &mut AppState, area: Rect) {
-    let (line, notices_btn_col, repo_btn_col) =
-        filter_bar::render_secondary_header(state, area.width);
-    state.notices.button_col = notices_btn_col;
-    state.layout.repo_button_col = repo_btn_col;
     frame.render_widget(Paragraph::new(vec![line]), area);
 }
 
@@ -487,7 +471,6 @@ fn render_flash_banner_into(frame: &mut Frame, state: &mut AppState, area: Rect)
 pub fn draw_agents(frame: &mut Frame, state: &mut AppState, area: Rect) {
     let layout = PaneLayout::compute(area);
     render_filter_bar_into(frame, state, layout.filter_area);
-    render_secondary_header_into(frame, state, layout.secondary_area);
 
     let row_collector::CollectedRows {
         lines,
@@ -515,7 +498,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pane_layout_splits_area_into_filter_secondary_list() {
+    fn pane_layout_places_agents_directly_below_status_filters() {
         let area = Rect {
             x: 0,
             y: 0,
@@ -527,16 +510,14 @@ mod tests {
         assert_eq!(layout.filter_area.y, 0);
         assert_eq!(layout.filter_area.width, 40);
         assert_eq!(layout.filter_area.height, 1);
-        assert_eq!(layout.secondary_area.y, 1);
-        assert_eq!(layout.secondary_area.height, 1);
-        assert_eq!(layout.list_area.y, 2);
-        assert_eq!(layout.list_area.height, 18);
+        assert_eq!(layout.list_area.y, 1);
+        assert_eq!(layout.list_area.height, 19);
         assert_eq!(layout.list_area.width, 40);
     }
 
     #[test]
     fn pane_layout_handles_tiny_area() {
-        // Only 1 row available — filter gets it, secondary and list collapse to 0.
+        // the status bar consumes the only available row.
         let area = Rect {
             x: 0,
             y: 0,
@@ -545,7 +526,6 @@ mod tests {
         };
         let layout = PaneLayout::compute(area);
         assert_eq!(layout.filter_area.height, 1);
-        assert_eq!(layout.secondary_area.height, 0);
         assert_eq!(layout.list_area.height, 0);
     }
 
@@ -559,7 +539,6 @@ mod tests {
         };
         let layout = PaneLayout::compute(area);
         assert_eq!(layout.filter_area.height, 0);
-        assert_eq!(layout.secondary_area.height, 0);
         assert_eq!(layout.list_area.height, 0);
     }
 
@@ -574,10 +553,8 @@ mod tests {
         let layout = PaneLayout::compute(area);
         assert_eq!(layout.filter_area.x, 5);
         assert_eq!(layout.filter_area.y, 10);
-        assert_eq!(layout.secondary_area.x, 5);
-        assert_eq!(layout.secondary_area.y, 11);
         assert_eq!(layout.list_area.x, 5);
-        assert_eq!(layout.list_area.y, 12);
-        assert_eq!(layout.list_area.height, 13);
+        assert_eq!(layout.list_area.y, 11);
+        assert_eq!(layout.list_area.height, 14);
     }
 }

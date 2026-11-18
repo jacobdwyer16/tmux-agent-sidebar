@@ -141,9 +141,9 @@ fn test_permission_mode_bypass_all_renders_danger_color() {
     // badge_danger (fg:167).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 26), @"
      ≡[fg:111] 1[fg:255]  ●[fg:245] 1[fg:255]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 0[fg:245] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ●[fg:82] model pending claude
+
 
 
     ╭[fg:240] [fg:240]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153] [fg:240]│[fg:240] [fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╮[fg:240]
@@ -192,9 +192,9 @@ fn test_permission_mode_full_auto_renders_auto_color() {
     // badge_auto (fg:221).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 26), @"
      ≡[fg:111] 1[fg:255]  ●[fg:245] 1[fg:255]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 0[fg:245] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ●[fg:82] model pending claude
+
 
 
     ╭[fg:240] [fg:240]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153] [fg:240]│[fg:240] [fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╮[fg:240]
@@ -242,7 +242,6 @@ fn test_permission_mode_normal_no_badge() {
     // Snapshot locks in that the agent row shows no badge in Normal mode.
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
     ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
@@ -315,9 +314,9 @@ fn test_git_summary_modified_uses_badge_auto_color() {
     // (badge_auto fg:221).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
      ≡[fg:111] 1[fg:255]  ●[fg:245] 1[fg:255]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 0[fg:245] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ●[fg:82] model pending claude
+
 
     ╭[fg:153] [fg:153]A[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252] [fg:240]│[fg:240] [fg:240]G[fg:153]i[fg:153]t[fg:153] [fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]╮[fg:153]
     │[fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153]│[fg:153]
@@ -377,10 +376,10 @@ fn test_task_progress_line_uses_task_progress_color() {
     // the progress glyphs (✔/◼/◻) with the "1/3" count.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 40), @"
      ≡[fg:111] 1[fg:255]    ●[fg:245] 1[fg:255]    ◎[fg:245] 0[fg:245]    ◐[fg:245] 0[fg:245]    ○[fg:245] 0[fg:245]    ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                                    —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ●[fg:82] model pending claude
        [fg:223] [fg:223]✔[fg:223]◼[fg:223]◻[fg:223] [fg:223]1[fg:223]/[fg:223]3[fg:223]
+
 
 
 
@@ -442,10 +441,10 @@ fn test_subagent_line_uses_subagent_color() {
     // rendered "Explore #1" label.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 27), @"
      ≡[fg:111] 1[fg:255]    ●[fg:245] 1[fg:255]    ◎[fg:245] 0[fg:245]    ◐[fg:245] 0[fg:245]    ○[fg:245] 0[fg:245]    ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                                    —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ●[fg:82] model pending claude
        [fg:252] [fg:252]└[fg:252] [fg:252]E[fg:73]x[fg:73]p[fg:73]l[fg:73]o[fg:73]r[fg:73]e[fg:73] [fg:73]#[fg:73]1[fg:73]
+
 
 
     ╭[fg:240] [fg:240]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153] [fg:240]│[fg:240] [fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╮[fg:240]
@@ -497,10 +496,10 @@ fn test_response_arrow_uses_response_arrow_color() {
     //   • text_active color (fg:255) on the focused response text
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 27), @"
      ≡[fg:111] 1[fg:255]    ●[fg:245] 0[fg:245]    ◎[fg:245] 0[fg:245]    ◐[fg:245] 0[fg:245]    ○[fg:245] 1[fg:255]    ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                                    —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ○[fg:110] model pending claude
       ▷[fg:81,bold] [fg:81,bold]T[fg:255]a[fg:255]s[fg:255]k[fg:255] [fg:255]c[fg:255]o[fg:255]m[fg:255]p[fg:255]l[fg:255]e[fg:255]t[fg:255]e[fg:255]d[fg:255] [fg:255]s[fg:255]u[fg:255]c[fg:255]c[fg:255]e[fg:255]s[fg:255]s[fg:255]f[fg:255]u[fg:255]l[fg:255]l[fg:255]y[fg:255]
+
 
 
     ╭[fg:240] [fg:240]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153] [fg:240]│[fg:240] [fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╮[fg:240]
@@ -556,9 +555,9 @@ fn test_pr_link_uses_pr_link_color() {
     // the underline modifier on the `#99` glyphs.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 40), @"
      ≡[fg:111] 1[fg:255]  ●[fg:245] 1[fg:255]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 0[fg:245] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ●[fg:82] model pending claude
+
 
 
 
@@ -624,9 +623,9 @@ fn test_diff_stat_added_uses_diff_added_color() {
     // diff_added color (fg:114).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 40), @"
      ≡[fg:111] 1[fg:255]  ●[fg:245] 1[fg:255]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 0[fg:245] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ●[fg:82] model pending claude
+
 
 
 
@@ -692,9 +691,9 @@ fn test_diff_stat_deleted_uses_diff_deleted_color() {
     // diff_deleted color (fg:174).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
      ≡[fg:111] 1[fg:255]  ●[fg:245] 1[fg:255]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 0[fg:245] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ●[fg:82] model pending claude
+
 
     ╭[fg:153] [fg:153]A[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252] [fg:240]│[fg:240] [fg:240]G[fg:153]i[fg:153]t[fg:153] [fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]╮[fg:153]
     │[fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153]│[fg:153]
@@ -751,9 +750,9 @@ fn test_file_change_stat_uses_file_change_color() {
     // badge_auto (fg:221) on the status glyph.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
      ≡[fg:111] 1[fg:255]  ●[fg:245] 1[fg:255]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 0[fg:245] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ●[fg:82] model pending claude
+
 
     ╭[fg:153] [fg:153]A[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252] [fg:240]│[fg:240] [fg:240]G[fg:153]i[fg:153]t[fg:153] [fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]╮[fg:153]
     │[fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153]│[fg:153]
@@ -851,7 +850,6 @@ fn test_branch_color_in_agent_panel() {
     // (fg:109).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 26), @"
      ≡[fg:111] 1[fg:255]    ●[fg:245] 1[fg:255]    ◎[fg:245] 0[fg:245]    ◐[fg:245] 0[fg:245]    ○[fg:245] 0[fg:245]    ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                                    —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]                                +[fg:153]
     ┃[fg:153] ●[fg:82] model pending claude
     ┃[fg:153]  [fg:109] [fg:109]f[fg:109]e[fg:109]a[fg:109]t[fg:109]u[fg:109]r[fg:109]e[fg:109]/[fg:109]c[fg:109]o[fg:109]o[fg:109]l[fg:109]-[fg:109]f[fg:109]e[fg:109]a[fg:109]t[fg:109]u[fg:109]r[fg:109]e[fg:109]
@@ -882,7 +880,7 @@ fn test_selection_bg_color_applied() {
     // background (bg:239).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
      ≡[fg:111] 1[fg:255]  ●[fg:245] 0[fg:245]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 1[fg:255] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
+    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153,bg:239] [bg:239]○[fg:110,bg:239] [bg:239]m[bg:239]o[bg:239]d[bg:239]e[bg:239]l[bg:239] [bg:239]p[bg:239]e[bg:239]n[bg:239]d[bg:239]i[bg:239]n[bg:239]g[bg:239] [bg:239]c[bg:239]l[bg:239]a[bg:239]u[bg:239]d[bg:239]e[bg:239] [bg:239] [bg:239] [bg:239] [bg:239]
        [fg:255] [fg:255]W[fg:255]a[fg:255]i[fg:255]t[fg:255]i[fg:255]n[fg:255]g[fg:255] [fg:255]f[fg:255]o[fg:255]r[fg:255] [fg:255]p[fg:255]r[fg:255]o[fg:255]m[fg:255]p[fg:255]t[fg:255]…[fg:255]
 
@@ -948,13 +946,13 @@ fn test_accent_vs_border_inactive_colors() {
     //   • unfocused group header rendered with border_inactive (fg:240)
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 30), @"
      ≡[fg:111] 2[fg:255]  ●[fg:245] 1[fg:255]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 1[fg:255] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     f[fg:153]o[fg:153]c[fg:153]u[fg:153]s[fg:153]e[fg:153]d[fg:153]-[fg:153]r[fg:153]e[fg:153]p[fg:153]o[fg:153]
     ┃[fg:153,bg:239] [bg:239]●[fg:82,bg:239] [bg:239]m[bg:239]o[bg:239]d[bg:239]e[bg:239]l[bg:239] [bg:239]p[bg:239]e[bg:239]n[bg:239]d[bg:239]i[bg:239]n[bg:239]g[bg:239] [bg:239]c[bg:239]l[bg:239]a[bg:239]u[bg:239]d[bg:239]e[bg:239] [bg:239] [bg:239] [bg:239] [bg:239]
 
     u[fg:255]n[fg:255]f[fg:255]o[fg:255]c[fg:255]u[fg:255]s[fg:255]e[fg:255]d[fg:255]-[fg:255]r[fg:255]e[fg:255]p[fg:255]o[fg:255]
       ○[fg:110] model pending codex
        [fg:244] [fg:244]W[fg:244]a[fg:244]i[fg:244]t[fg:244]i[fg:244]n[fg:244]g[fg:244] [fg:244]f[fg:244]o[fg:244]r[fg:244] [fg:244]p[fg:244]r[fg:244]o[fg:244]m[fg:244]p[fg:244]t[fg:244]…[fg:244]
+
 
 
     ╭[fg:240] [fg:240]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153] [fg:240]│[fg:240] [fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╮[fg:240]
@@ -1004,7 +1002,6 @@ fn test_running_status_color_in_output() {
     // color (fg:82).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
      ≡[fg:111] 1[fg:255]  ●[fg:245] 1[fg:255]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 0[fg:245] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ●[fg:82] model pending claude
     ");
@@ -1032,7 +1029,6 @@ fn test_waiting_status_color_in_output() {
     // color (fg:221).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
      ≡[fg:111] 1[fg:255]  ●[fg:245] 0[fg:245]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 1[fg:255] ○[fg:245] 0[fg:245] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ◐[fg:221] model pending claude
     ");
@@ -1060,7 +1056,6 @@ fn test_error_status_color_in_output() {
     // color (fg:167).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
      ≡[fg:111] 1[fg:255]  ●[fg:245] 0[fg:245]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 0[fg:245] ✕[fg:245] 1[fg:255]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ✕[fg:167] model pending claude
     ");
@@ -1087,9 +1082,9 @@ fn test_idle_status_color_in_output() {
     // color (fg:110).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
      ≡[fg:111] 1[fg:255]  ●[fg:245] 0[fg:245]  ◎[fg:245] 0[fg:245]  ◐[fg:245] 0[fg:245] ○[fg:245] 1[fg:255] ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ○[fg:110] model pending claude
+       [fg:255] [fg:255]W[fg:255]a[fg:255]i[fg:255]t[fg:255]i[fg:255]n[fg:255]g[fg:255] [fg:255]f[fg:255]o[fg:255]r[fg:255] [fg:255]p[fg:255]r[fg:255]o[fg:255]m[fg:255]p[fg:255]t[fg:255]…[fg:255]
 
     ╭[fg:240] [fg:240]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153] [fg:240]│[fg:240] [fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╮[fg:240]
     │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]

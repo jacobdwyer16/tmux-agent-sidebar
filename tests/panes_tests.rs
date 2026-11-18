@@ -120,7 +120,6 @@ fn test_running_icon_blink_off() {
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
     ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
@@ -149,7 +148,6 @@ fn test_running_spinner_frame_advances() {
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
      ≡ 1  ● 1  ◎ 0  ◐ 0 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
     ┃ ● model pending claude
     ╭ Activity │ Git ──────────╮
@@ -177,7 +175,6 @@ fn test_waiting_icon() {
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
      ≡ 1  ● 0  ◎ 0  ◐ 1 ○ 0 ✕ 0
-    ⓘ                        — ▾
     project
     ┃ ◐ model pending claude
     ╭ Activity │ Git ──────────╮
@@ -205,7 +202,6 @@ fn test_error_icon() {
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
      ≡ 1  ● 0  ◎ 0  ◐ 0 ○ 0 ✕ 1
-    ⓘ                        — ▾
     project
     ┃ ✕ model pending claude
     ╭ Activity │ Git ──────────╮
@@ -297,10 +293,10 @@ fn test_agents_auto_scroll_up_shows_group_header() {
     // scrolling back up to the first agent.
     insta::assert_snapshot!(render_to_string(&mut state, 28, 26), @"
      ≡ 8  ● 0  ◎ 0  ◐ 0 ○ 8 ✕ 0
-    ⓘ                        — ▾
     project
       ○ model pending claude
         Waiting for prompt…
+    ┃ ○ model pending claude
     ╭ Activity │ Git ──────────╮
     │      No activity yet     │
     ╰──────────────────────────╯
@@ -336,7 +332,6 @@ fn repo_popup_renders_repo_names_when_open() {
     // repo names when opened.
     insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
      ≡ 2    ● 0    ◎ 0    ◐ 0    ○ 2    ✕ 0
-    ⓘ                                    — ▾
     frontend                    ┌──────────┐
     ┃ ○ model pending claude    │ All      │
         Waiting for prompt…     │ frontend │
@@ -384,7 +379,6 @@ fn repo_popup_highlights_selected_entry_with_background() {
     // background (bg:239) on each cell of the entry.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 30), @"
      ≡[fg:111] 2[fg:255]    ●[fg:245] 0[fg:245]    ◎[fg:245] 0[fg:245]    ◐[fg:245] 0[fg:245]    ○[fg:245] 2[fg:255]    ✕[fg:245] 0[fg:245]
-    ⓘ[fg:221]                                    —[fg:255] ▾[fg:255]
     f[fg:153]r[fg:153]o[fg:153]n[fg:153]t[fg:153]e[fg:153]n[fg:153]d[fg:153]                    ┌[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]┐[fg:153]
     ┃[fg:153] ○[fg:110] model pending claude    │[fg:153] [fg:255]A[fg:255]l[fg:255]l[fg:255] [fg:255] [fg:255] [fg:255] [fg:255] [fg:255] [fg:255]│[fg:153]
        [fg:255] [fg:255]W[fg:255]a[fg:255]i[fg:255]t[fg:255]i[fg:255]n[fg:255]g[fg:255] [fg:255]f[fg:255]o[fg:255]r[fg:255] [fg:255]p[fg:255]r[fg:255]o[fg:255]m[fg:255]p[fg:255]t[fg:255]…[fg:255]     │[fg:153] [fg:252]f[fg:252]r[fg:252]o[fg:252]n[fg:252]t[fg:252]e[fg:252]n[fg:252]d[fg:252] [fg:252]│[fg:153]
@@ -392,6 +386,7 @@ fn repo_popup_highlights_selected_entry_with_background() {
     b[fg:153]a[fg:153]c[fg:153]k[fg:153]e[fg:153]n[fg:153]d[fg:153]                     └[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]┘[fg:153]
     ┃[fg:153] ○[fg:110] model pending claude
        [fg:255] [fg:255]W[fg:255]a[fg:255]i[fg:255]t[fg:255]i[fg:255]n[fg:255]g[fg:255] [fg:255]f[fg:255]o[fg:255]r[fg:255] [fg:255]p[fg:255]r[fg:255]o[fg:255]m[fg:255]p[fg:255]t[fg:255]…[fg:255]
+
 
     ╭[fg:240] [fg:240]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153] [fg:240]│[fg:240] [fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╮[fg:240]
     │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
