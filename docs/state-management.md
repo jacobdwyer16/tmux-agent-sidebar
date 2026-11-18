@@ -2,13 +2,20 @@
 
 ## State Scope & Update Frequency
 
+Process discovery, tmux polling, transcript parsing, and repository discovery run
+on the monitoring worker. The input thread applies snapshots without doing this
+I/O. A separate action worker handles pane activation and coalesced global-option
+writes. Snapshot generations prevent older polling results from undoing newer
+focus or filter input; cursor and tab preferences remain owned by the input thread.
+
 Every piece of state belongs to one of three scopes: **Global** (shared across all sidebar instances via tmux variables), **Per-pane** (keyed by tmux pane ID), or **Local** (single sidebar process only). The table below shows where each field lives, how often it updates, and what triggers the update.
 
 ### Global State (synced via tmux global variables)
 
-Stored in `GlobalState`. Written to tmux on change, with the cursor save
-debounced briefly so selection changes do not block redraw/input handling;
-reloaded on SIGUSR1.
+Stored in `GlobalState`. Changes are queued for the action worker, with cursor
+saves debounced for 120 ms. Only acknowledged writes advance the saved state;
+failed writes remain pending. Polling snapshots reload remote options on window
+reactivation without overwriting newer local input.
 
 | Field | Tmux Variable | Update Trigger | Description |
 |-------|--------------|----------------|-------------|

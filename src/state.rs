@@ -20,8 +20,8 @@ mod timers;
 
 pub use activity::ActivityState;
 pub use filter::{RepoFilter, StatusFilter};
-pub use focus::{Focus, FocusState};
-pub use global::GlobalState;
+pub use focus::{Focus, FocusState, PaneActivation};
+pub use global::{GlobalState, GlobalWrite, GlobalWriteRequest};
 pub use layout::{FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget};
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};

@@ -92,11 +92,12 @@ pub fn group_panes_by_repo(sessions: &[crate::tmux::SessionInfo]) -> Vec<RepoGro
                 // Cache the base git info per path. `get` first avoids a key
                 // clone on cache hits; misses fall through to `insert` which
                 // owns the key plus the (expensive) git-command lookup.
-                let mut git_info = match git_cache.get(pane.path.as_str()) {
+                let path_key = repository_key(&pane.path);
+                let mut git_info = match git_cache.get(&path_key) {
                     Some(cached) => cached.clone(),
                     None => {
                         let resolved = resolve_pane_git_info(&pane.path);
-                        git_cache.insert(pane.path.clone(), resolved.clone());
+                        git_cache.insert(path_key, resolved.clone());
                         resolved
                     }
                 };
@@ -113,12 +114,10 @@ pub fn group_panes_by_repo(sessions: &[crate::tmux::SessionInfo]) -> Vec<RepoGro
                     git_info.is_worktree = true;
                 }
 
-                let group_key = match &git_info.repo_root {
-                    Some(root) => root.clone(),
-                    None => pane.path.clone(),
-                };
-
-                let display_name = group_key
+                let group_path = git_info.repo_root.as_deref().unwrap_or(&pane.path);
+                let group_key = repository_key(group_path);
+                let display_name = group_path
+                    .trim_end_matches(['/', '\\'])
                     .rsplit(['/', '\\'])
                     .next()
                     .unwrap_or(&group_key)
@@ -146,6 +145,28 @@ pub fn group_panes_by_repo(sessions: &[crate::tmux::SessionInfo]) -> Vec<RepoGro
     result
 }
 
+fn repository_key(path: &str) -> String {
+    #[cfg(windows)]
+    {
+        let path = path.replace('\\', "/");
+        let path = if let Some(unc) = path.strip_prefix("//?/UNC/") {
+            format!("//{unc}")
+        } else {
+            path.strip_prefix("//?/").unwrap_or(&path).to_string()
+        };
+        let path = if path == "/" || path.ends_with(":/") {
+            path.as_str()
+        } else {
+            path.trim_end_matches('/')
+        };
+        path.to_lowercase()
+    }
+    #[cfg(not(windows))]
+    {
+        path.to_string()
+    }
+}
+
 /// Resolve a possibly-relative git path to an absolute canonical path.
 fn resolve_git_path(base: &str, git_path: &str) -> std::path::PathBuf {
     let p = if std::path::Path::new(git_path).is_absolute() {
@@ -159,6 +180,25 @@ fn resolve_git_path(base: &str, git_path: &str) -> std::path::PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_path_aliases_share_one_group_without_changing_display_case() {
+        let panes = vec![
+            test_pane("%1", "Q:\\sidebar-test\\Documents"),
+            test_pane("%2", "q:/sidebar-test/Documents/"),
+            test_pane("%3", "\\\\?\\Q:\\sidebar-test\\Documents"),
+        ];
+        let groups = group_panes_by_repo(&[test_session(vec![test_window(panes, true)])]);
+        assert_eq!(groups.len(), 1);
+        let group = groups.first().expect("one repository group");
+        assert_eq!(group.name, "Documents");
+        assert_eq!(group.panes.len(), 3);
+        assert_ne!(
+            repository_key("Q:/a/Documents"),
+            repository_key("Q:/b/Documents")
+        );
+    }
 
     #[test]
     fn resolve_git_info_returns_none_for_empty_path() {

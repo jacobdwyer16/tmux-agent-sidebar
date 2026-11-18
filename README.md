@@ -131,6 +131,8 @@ The installed executable is `bin/tmux-agent-sidebar.exe`.
 - Agent rows show the tmux session name in brackets beside the model. Project
   groups stay pinned to the agent session's starting project while temporary
   scratchpad visits continue to update its live working-directory metadata.
+- Navigation redraws immediately while monitoring and tmux commands run on
+  background workers. Windows path aliases share one project group.
 - The bottom Git/Activity panel is hidden in the local Windows configuration.
 - Inside the sidebar, `j`/`k` select agents, `l` or Enter opens the selected agent,
   and `h` returns to the previously focused terminal. `r` opens the repo picker;

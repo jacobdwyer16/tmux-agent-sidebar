@@ -13,25 +13,31 @@ use crate::version::{self, UpdateNotice};
 /// Channels and shared flags produced by [`spawn`] that the main event loop
 /// drains every tick.
 pub(super) struct Workers {
-    pub git_rx: Receiver<GitData>,
+    pub git_rx: Receiver<GitUpdate>,
+    pub git_target_tx: mpsc::Sender<String>,
     pub session_rx: Receiver<HashMap<String, String>>,
     pub version_rx: Receiver<UpdateNotice>,
     pub git_tab_active: Arc<AtomicBool>,
 }
 
+pub(super) struct GitUpdate {
+    pub pane_id: String,
+    pub data: GitData,
+}
+
 /// Spawn the background threads (git polling, session-name polling, version
 /// notice fetch) that feed the event loop.
 pub(super) fn spawn(state: &AppState) -> Workers {
-    let (git_tx, git_rx) = mpsc::channel::<GitData>();
+    let (git_tx, git_rx) = mpsc::channel::<GitUpdate>();
+    let (git_target_tx, git_target_rx) = mpsc::channel::<String>();
     let (session_tx, session_rx) = mpsc::channel::<HashMap<String, String>>();
     let (version_tx, version_rx) = mpsc::channel::<UpdateNotice>();
-    let tmux_pane_clone = state.tmux_pane.clone();
     let git_tab_active = Arc::new(AtomicBool::new(
         state.bottom_panel_height > 0 && state.bottom_tab == BottomTab::GitStatus,
     ));
     let git_tab_flag = Arc::clone(&git_tab_active);
     std::thread::spawn(move || {
-        git_poll_loop(&tmux_pane_clone, &git_tx, &git_tab_flag);
+        git_poll_loop(&git_tx, &git_tab_flag, git_target_rx);
     });
     std::thread::spawn(move || {
         session_poll_loop(&session_tx);
@@ -44,6 +50,7 @@ pub(super) fn spawn(state: &AppState) -> Workers {
 
     Workers {
         git_rx,
+        git_target_tx,
         session_rx,
         version_rx,
         git_tab_active,
@@ -68,30 +75,41 @@ pub(super) fn session_poll_loop(tx: &mpsc::Sender<HashMap<String, String>>) {
 /// through an in-memory `(path, branch)`-keyed cache so `gh pr view` (the only
 /// hop that costs GitHub API quota) runs at most once per `PR_CACHE_TTL`
 /// instead of every tick.
-pub(super) fn git_poll_loop(tmux_pane: &str, git_tx: &mpsc::Sender<GitData>, active: &AtomicBool) {
-    let mut last_path: Option<String> = None;
+pub(super) fn git_poll_loop(
+    git_tx: &mpsc::Sender<GitUpdate>,
+    active: &AtomicBool,
+    targets: Receiver<String>,
+) {
+    let mut target = None;
     let mut pr_cache = git::PrCache::new();
     loop {
-        std::thread::sleep(Duration::from_secs(2));
+        match targets.recv_timeout(Duration::from_secs(2)) {
+            Ok(pane) => target = Some(targets.try_iter().last().unwrap_or(pane)),
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => return,
+        }
 
         if !active.load(Ordering::Relaxed) {
             continue;
         }
 
-        // When the sidebar has focus, focused_pane_path returns None.
-        // Reuse the last known path so git data keeps updating.
-        if let Some(p) = tmux::focused_pane_path(tmux_pane) {
-            last_path = Some(p);
-        }
-        if let Some(ref path) = last_path {
-            let mut data = git::fetch_git_data(path);
+        if let Some(pane_id) = &target
+            && let Some(path) = tmux::get_pane_path(pane_id)
+        {
+            let mut data = git::fetch_git_data(&path);
             data.pr_number = pr_cache.get_or_fetch(
-                path,
+                &path,
                 &data.branch,
                 std::time::Instant::now(),
                 git::fetch_pr_number,
             );
-            if git_tx.send(data).is_err() {
+            if git_tx
+                .send(GitUpdate {
+                    pane_id: pane_id.clone(),
+                    data,
+                })
+                .is_err()
+            {
                 return;
             }
         }

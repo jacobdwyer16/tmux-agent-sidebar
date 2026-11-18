@@ -160,7 +160,7 @@ impl AppState {
     /// sidebar can render `/rename`-assigned labels. The map itself is
     /// refreshed off-thread by `session_poll_loop` in `main.rs`; this
     /// function only consumes the cached snapshot.
-    fn refresh_session_names(&mut self) {
+    pub(crate) fn refresh_session_names(&mut self) {
         for group in &mut self.repo_groups {
             for (pane, _) in &mut group.panes {
                 if let Some(sid) = &pane.session_id

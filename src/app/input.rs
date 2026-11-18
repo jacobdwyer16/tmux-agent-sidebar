@@ -131,7 +131,7 @@ pub(super) fn handle_key_event(
             } else if state.focus_state.focus == Focus::Panes
                 && let Some(pane) = &state.focus_state.focused_pane_id
             {
-                crate::tmux::select_pane(pane);
+                state.focus_state.request_activation(pane.clone(), false);
             }
         }
         KeyCode::Char('l') | KeyCode::Right => {

@@ -1,6 +1,13 @@
 use super::AppState;
 use crate::tmux;
 
+#[derive(Debug, Clone)]
+pub struct PaneActivation {
+    pub pane_id: String,
+    pub ensure_sidebar: bool,
+    pub generation: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum Focus {
     Filter,
@@ -15,6 +22,8 @@ pub struct FocusState {
     pub focus: Focus,
     pub focused_pane_id: Option<String>,
     pub prev_focused_pane_id: Option<String>,
+    pub pending_activation: Option<PaneActivation>,
+    pub activation_generation: u64,
 }
 
 impl FocusState {
@@ -24,7 +33,21 @@ impl FocusState {
             focus: Focus::Panes,
             focused_pane_id: None,
             prev_focused_pane_id: None,
+            pending_activation: None,
+            activation_generation: 0,
         }
+    }
+
+    pub fn request_activation(&mut self, pane_id: String, ensure_sidebar: bool) {
+        self.activation_generation = self
+            .activation_generation
+            .checked_add(1)
+            .expect("focus generation overflow");
+        self.pending_activation = Some(PaneActivation {
+            pane_id,
+            ensure_sidebar,
+            generation: self.activation_generation,
+        });
     }
 }
 
@@ -91,26 +114,7 @@ impl AppState {
             // repo header highlight move without waiting for the next
             // periodic tmux refresh.
             self.focus_state.focused_pane_id = Some(target_pane_id.clone());
-            tmux::select_pane(&target_pane_id);
-
-            // The jump may land on a window that has no sidebar of its own
-            // (e.g. with @sidebar_auto_create off). Summon one there so the
-            // sidebar "follows" the jump instead of disappearing. create-only
-            // is a no-op when that window already has a sidebar.
-            let window_id = tmux::display_message(&target_pane_id, "#{window_id}");
-            if !window_id.is_empty() {
-                let pane_path = tmux::display_message(&target_pane_id, "#{pane_current_path}");
-                let pane_path = if pane_path.is_empty() {
-                    "~".to_string()
-                } else {
-                    pane_path
-                };
-                crate::cli::toggle::cmd_toggle(&[
-                    "--create-only".to_string(),
-                    window_id,
-                    pane_path,
-                ]);
-            }
+            self.focus_state.request_activation(target_pane_id, true);
         }
     }
 }
