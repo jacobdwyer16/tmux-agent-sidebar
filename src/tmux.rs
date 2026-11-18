@@ -6,6 +6,9 @@ mod types;
 #[cfg(windows)]
 mod windows;
 
+pub(crate) use options::sync_project_identity;
+pub(crate) use query::clear_agent_pane_state;
+
 pub use options::SIDEBAR_CLOSE_REQUEST;
 
 pub use commands::{

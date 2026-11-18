@@ -63,23 +63,10 @@ pub(in crate::cli::hook) fn sync_pane_location(
     if !should_update_cwd(&current_subagents) {
         return;
     }
-    let previous_session = tmux::get_pane_option_value(pane, tmux::PANE_SESSION_ID);
-    let previous_project = tmux::get_pane_option_value(pane, tmux::PANE_PROJECT_DIR);
-    let session_id = session_id.as_deref().filter(|sid| !sid.is_empty());
-    let new_session = session_id.is_some_and(|sid| sid != previous_session);
-    if previous_project.is_empty() || new_session {
-        let project = project_dir
-            .filter(|directory| !directory.is_empty())
-            .unwrap_or_else(|| resolve_cwd(cwd, worktree));
-        if project.is_empty() {
-            tmux::unset_pane_option(pane, tmux::PANE_PROJECT_DIR);
-        } else {
-            tmux::set_pane_option(pane, tmux::PANE_PROJECT_DIR, project);
-        }
-    }
-    if let Some(sid) = session_id {
-        tmux::set_pane_option(pane, tmux::PANE_SESSION_ID, sid);
-    }
+    let project = project_dir
+        .filter(|directory| !directory.is_empty())
+        .unwrap_or_else(|| resolve_cwd(cwd, worktree));
+    tmux::sync_project_identity(pane, session_id.as_deref(), project);
     if !cwd.is_empty() {
         tmux::set_pane_option(pane, tmux::PANE_CWD, cwd);
     }

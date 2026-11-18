@@ -20,16 +20,21 @@ pub(super) fn status_row(
     let icon_color =
         pulse_color.unwrap_or_else(|| theme.status_color(&pane.status, pane.attention));
     let model = compact_model(&pane.model);
-    let name = if !pane.tmux_session_name.is_empty() {
-        if pane.session_name.is_empty() {
-            format!("[{}]", pane.tmux_session_name)
-        } else {
-            format!("[{}] {}", pane.tmux_session_name, pane.session_name)
-        }
-    } else if pane.session_name.is_empty() {
-        pane.agent.label().to_string()
+    let conversation = if pane.session_name.is_empty() {
+        pane.agent.label()
     } else {
-        pane.session_name.clone()
+        &pane.session_name
+    };
+    let name_width = if pane.tmux_session_name.is_empty() {
+        display_width(conversation)
+    } else {
+        display_width(&pane.tmux_session_name)
+            + 2
+            + if pane.session_name.is_empty() {
+                0
+            } else {
+                1 + display_width(&pane.session_name)
+            }
     };
     let fixed_width = display_width(icon) + 2;
     let elapsed = elapsed_label(pane.started_at, now);
@@ -37,11 +42,14 @@ pub(super) fn status_row(
     let available = ctx
         .inner_width
         .saturating_sub(fixed_width + elapsed_reserved);
-    let model_budget =
-        display_width(&model).min(available.saturating_sub(display_width(&name).min(6)));
+    let model_budget = display_width(&model).min(available.saturating_sub(name_width.min(6)));
     let model = truncate_to_width(&model, model_budget);
     let name_budget = available.saturating_sub(display_width(&model));
-    let name = if !pane.tmux_session_name.is_empty() && name_budget >= 2 {
+    let name = if pane.tmux_session_name.is_empty() {
+        truncate_to_width(conversation, name_budget)
+    } else if name_budget < 2 {
+        truncate_to_width("[]", name_budget)
+    } else {
         let mut label = format!(
             "[{}]",
             truncate_to_width(&pane.tmux_session_name, name_budget - 2)
@@ -52,8 +60,6 @@ pub(super) fn status_row(
             label.push_str(&truncate_to_width(&pane.session_name, remaining - 1));
         }
         label
-    } else {
-        truncate_to_width(&name, name_budget)
     };
     let left_width = fixed_width + display_width(&model) + display_width(&name);
     let elapsed = if display_width(&elapsed) < ctx.inner_width.saturating_sub(left_width) {

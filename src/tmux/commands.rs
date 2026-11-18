@@ -136,7 +136,7 @@ pub fn set_window_option(window: &str, key: &str, value: &str) -> Result<(), Str
     #[cfg(windows)]
     {
         super::windows::set(window, key, Some(value));
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(windows))]
     run_tmux_capture(&["set", "-w", "-t", window, key, value]).map(|_| ())

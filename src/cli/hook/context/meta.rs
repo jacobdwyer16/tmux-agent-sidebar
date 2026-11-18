@@ -1,4 +1,5 @@
 use super::location::{pane_writes_allowed, project_dir_for_agent, sync_pane_location};
+#[cfg(test)]
 use super::pending::{PENDING_SESSION_END, PENDING_WORKTREE_REMOVE};
 use crate::event::WorktreeInfo;
 use crate::tmux;
@@ -58,30 +59,6 @@ pub(in crate::cli::hook) fn clear_run_state(pane: &str) {
 /// Check if a prompt is a system-injected message (not a real user prompt).
 pub(in crate::cli::hook) fn is_system_message(s: &str) -> bool {
     s.contains("<task-notification>") || s.contains("<system-reminder>") || s.contains("<task-")
-}
-
-pub(in crate::cli::hook) fn clear_all_meta(pane: &str) {
-    tmux::unset_pane_option(pane, "@pane_model");
-    tmux::unset_pane_option(pane, tmux::PANE_NAME);
-    tmux::unset_pane_option(pane, crate::codex::TRANSCRIPT_OPTION);
-    for key in &[
-        tmux::PANE_AGENT,
-        tmux::PANE_PROMPT,
-        tmux::PANE_PROMPT_SOURCE,
-        tmux::PANE_BG_CMD,
-        tmux::PANE_SUBAGENTS,
-        tmux::PANE_CWD,
-        tmux::PANE_PROJECT_DIR,
-        tmux::PANE_PERMISSION_MODE,
-        tmux::PANE_WORKTREE_NAME,
-        tmux::PANE_WORKTREE_BRANCH,
-        tmux::PANE_SESSION_ID,
-        PENDING_SESSION_END,
-        PENDING_WORKTREE_REMOVE,
-    ] {
-        tmux::unset_pane_option(pane, key);
-    }
-    clear_run_state(pane);
 }
 
 /// Write a task-reset marker to the activity log so `parse_task_progress`
@@ -291,7 +268,7 @@ mod tests {
             tmux::test_mock::set(pane, key, "x");
         }
 
-        clear_all_meta(pane);
+        tmux::clear_agent_pane_state(pane);
 
         for key in [
             tmux::PANE_AGENT,

@@ -247,7 +247,7 @@ fn snippet_codex_non_session_start_has_empty_matcher() {
 fn missing_hooks_is_empty_for_matching_claude_config() {
     let config = build_agent_snippet("claude", FAKE_HOOK).unwrap();
     assert!(missing_hooks("claude", &config, FAKE_HOOK).is_empty());
-    assert!(!has_missing_hooks("claude", &config, FAKE_HOOK));
+    assert!(missing_hooks("claude", &config, FAKE_HOOK).is_empty());
 }
 
 #[test]
@@ -263,7 +263,7 @@ fn missing_hooks_reports_removed_trigger() {
         missing_hooks("claude", &config, FAKE_HOOK),
         vec!["SessionEnd".to_string()]
     );
-    assert!(has_missing_hooks("claude", &config, FAKE_HOOK));
+    assert!(!missing_hooks("claude", &config, FAKE_HOOK).is_empty());
 }
 
 #[test]
@@ -489,7 +489,7 @@ fn missing_hooks_accepts_multiple_entries_and_actions_for_same_trigger() {
     }));
 
     assert!(missing_hooks("claude", &config, FAKE_HOOK).is_empty());
-    assert!(!has_missing_hooks("claude", &config, FAKE_HOOK));
+    assert!(missing_hooks("claude", &config, FAKE_HOOK).is_empty());
 }
 
 #[test]

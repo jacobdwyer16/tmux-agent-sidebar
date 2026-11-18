@@ -32,9 +32,9 @@ fn claude_path(id: &str) -> Result<Option<PathBuf>, String> {
 }
 
 fn read_model(path: &Path, length: u64) -> Result<String, String> {
+    let mut file = File::open(path).map_err(|error| error.to_string())?;
     let mut count = length.min(65536);
     loop {
-        let mut file = File::open(path).map_err(|error| error.to_string())?;
         file.seek(SeekFrom::Start(length - count))
             .map_err(|error| error.to_string())?;
         let mut bytes = Vec::new();
@@ -66,10 +66,10 @@ fn read_model(path: &Path, length: u64) -> Result<String, String> {
                 .get("message")
                 .and_then(|message| message.get("model"))
                 .and_then(Value::as_str)
+                && !model.is_empty()
+                && !model.starts_with('<')
             {
-                if !model.is_empty() && !model.starts_with('<') {
-                    return Ok(model.to_string());
-                }
+                return Ok(model.to_string());
             }
         }
         if count == length {

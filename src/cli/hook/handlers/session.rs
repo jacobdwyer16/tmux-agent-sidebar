@@ -33,7 +33,7 @@ pub(in crate::cli::hook) fn on_session_start(
     // list, clearing it here would drop the marker that
     // `should_update_cwd` and `drain_pending_teardowns` rely on. The
     // normal teardown paths (`run_session_end_teardown` via
-    // `clear_all_meta`) already clear the list when a real session
+    // `clear_agent_pane_state`) already clear the list when a real session
     // ends, so the only state this would skip clearing is a subagent
     // list stranded by a hard crash — acceptable vs. racing against
     // legitimate subagent activity.

@@ -128,10 +128,10 @@ pub(super) fn handle_key_event(
                 state.global.status_filter = state.global.status_filter.prev();
                 state.global.save_filter();
                 state.rebuild_row_targets();
-            } else if state.focus_state.focus == Focus::Panes {
-                if let Some(pane) = &state.focus_state.focused_pane_id {
-                    crate::tmux::select_pane(pane);
-                }
+            } else if state.focus_state.focus == Focus::Panes
+                && let Some(pane) = &state.focus_state.focused_pane_id
+            {
+                crate::tmux::select_pane(pane);
             }
         }
         KeyCode::Char('l') | KeyCode::Right => {
@@ -168,11 +168,9 @@ pub(super) fn handle_key_event(
             state.global.save_filter();
             state.rebuild_row_targets();
         }
-        KeyCode::BackTab => {
-            if state.bottom_panel_height > 0 {
-                state.next_bottom_tab();
-                git_tab_active.store(state.bottom_tab == BottomTab::GitStatus, Ordering::Relaxed);
-            }
+        KeyCode::BackTab if state.bottom_panel_height > 0 => {
+            state.next_bottom_tab();
+            git_tab_active.store(state.bottom_tab == BottomTab::GitStatus, Ordering::Relaxed);
         }
         _ => {}
     }

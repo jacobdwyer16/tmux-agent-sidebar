@@ -45,20 +45,7 @@ fn model_name(input: &Value) -> Option<&str> {
 fn update_report(pane: &str, agent: &str, input: &Value) -> Result<(), String> {
     let status = report_status(input)?;
     if status == "stopped" {
-        for key in [
-            tmux::PANE_AGENT,
-            tmux::PANE_SESSION_ID,
-            tmux::PANE_STATUS,
-            tmux::PANE_NAME,
-            "@pane_model",
-            tmux::PANE_SUBAGENTS,
-            tmux::PANE_STARTED_AT,
-            tmux::PANE_WAIT_REASON,
-            tmux::PANE_CWD,
-            tmux::PANE_PROJECT_DIR,
-        ] {
-            tmux::unset_pane_option(pane, key);
-        }
+        tmux::clear_agent_pane_state(pane);
         return Ok(());
     }
     let old_status = tmux::get_pane_option_value(pane, tmux::PANE_STATUS);
@@ -81,19 +68,10 @@ fn update_report(pane: &str, agent: &str, input: &Value) -> Result<(), String> {
         }
     }
     tmux::set_pane_option(pane, tmux::PANE_AGENT, agent);
-    if !id.is_empty() {
-        tmux::set_pane_option(pane, tmux::PANE_SESSION_ID, id);
-    }
-    if new_session {
-        tmux::unset_pane_option(pane, tmux::PANE_PROJECT_DIR);
-    }
-    if let Some(cwd) = input.get("cwd").and_then(Value::as_str)
-        && !cwd.is_empty()
-    {
+    let cwd = input.get("cwd").and_then(Value::as_str).unwrap_or("");
+    tmux::sync_project_identity(pane, Some(id), cwd);
+    if !cwd.is_empty() {
         tmux::set_pane_option(pane, tmux::PANE_CWD, cwd);
-        if tmux::get_pane_option_value(pane, tmux::PANE_PROJECT_DIR).is_empty() {
-            tmux::set_pane_option(pane, tmux::PANE_PROJECT_DIR, cwd);
-        }
     }
     if let Some(model) = model_name(input) {
         tmux::set_pane_option(pane, "@pane_model", &sanitize_tmux_value(model));

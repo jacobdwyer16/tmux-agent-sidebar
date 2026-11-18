@@ -166,12 +166,12 @@ fn build_session_hierarchy(
         // Deduplicate panes shared across grouped sessions:
         // same pane_pid may appear in multiple sessions, keep only
         // the first occurrence. pane_pid is at index 13 in pane_fields.
-        if let Some(pid_str) = pane_fields.get(pane_line_field::PANE_PID) {
-            if let Ok(pid) = pid_str.parse::<u32>() {
-                if pid != 0 && !seen_pids.insert(pid) {
-                    continue;
-                }
-            }
+        if let Some(pid_str) = pane_fields.get(pane_line_field::PANE_PID)
+            && let Ok(pid) = pid_str.parse::<u32>()
+            && pid != 0
+            && !seen_pids.insert(pid)
+        {
+            continue;
         }
 
         let sessions_entry = sessions_map.entry(session_name.to_string()).or_default();
@@ -381,15 +381,8 @@ fn parse_pane_fields_with_processes(
     })
 }
 
-/// Wipe all agent-tracked tmux pane options and the activity log file for
-/// `pane_id`. Triggered by `parse_pane_fields` when it detects a Codex or
-/// OpenCode pane that has dropped back to the user's shell, since neither
-/// CLI fires a reliable process-exit hook. Claude panes are never routed
-/// here because Claude has its own SessionEnd hook. The set of keys
-/// mirrors `clear_all_meta` + `clear_run_state` + status/attention clears
-/// in `src/cli/hook/context.rs`; keep them in sync when a new `@pane_*`
-/// key is added.
-fn clear_agent_pane_state(pane_id: &str) {
+/// Clear agent-session metadata and activity on explicit or detected agent exit.
+pub(crate) fn clear_agent_pane_state(pane_id: &str) {
     const KEYS: &[&str] = &[
         "@pane_model",
         PANE_NAME,

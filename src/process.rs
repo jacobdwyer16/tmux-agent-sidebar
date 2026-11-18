@@ -29,15 +29,13 @@ fn windows_command_lines() -> HashMap<u32, String> {
     );
     let rows: Vec<serde_json::Value> =
         serde_json::from_slice(&output.stdout).expect("invalid Windows process command data");
-    let commands: HashMap<u32, String> = rows
-        .into_iter()
+    rows.into_iter()
         .filter_map(|row| {
             let pid = row.get("ProcessId")?.as_u64()? as u32;
             let command = row.get("CommandLine")?.as_str()?;
             Some((pid, command.to_string()))
         })
-        .collect();
-    commands
+        .collect()
 }
 
 #[derive(Debug, Clone)]

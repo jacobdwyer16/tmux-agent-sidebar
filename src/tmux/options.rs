@@ -7,9 +7,7 @@ pub const SIDEBAR_CLOSE_REQUEST: &str = "@pane_sidebar_close_requested";
 // Single source of truth for every `@pane_*` tmux option the sidebar
 // writes or reads. Hooks, the TUI refresh path, and the query layer
 // all go through these constants so a typo can't silently corrupt
-// pane state. Keep `clear_agent_pane_state` in `tmux/query.rs` and
-// `clear_all_meta` in `cli/hook/context/meta.rs` in sync with this
-// list — both sweep the full set on teardown.
+// pane state. Agent-exit cleanup is centralized in `clear_agent_pane_state`.
 
 /// Agent name the hooks identified for the pane (`claude` / `codex`
 /// / `opencode`). Drives the sidebar's per-row icon.
@@ -159,46 +157,57 @@ pub fn get_all_global_options() -> std::collections::HashMap<String, String> {
 
 pub fn set_pane_option(pane: &str, key: &str, value: &str) {
     #[cfg(test)]
-    if test_mock::intercept_set(pane, key, value) {
-        return;
-    }
+    test_mock::set(pane, key, value);
     #[cfg(all(windows, not(test)))]
     super::windows::set(pane, key, Some(value));
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), not(test)))]
     let _ = run_tmux(&["set", "-t", pane, "-p", key, value]);
 }
 
 pub fn unset_pane_option(pane: &str, key: &str) {
     #[cfg(test)]
-    if test_mock::intercept_unset(pane, key) {
-        return;
-    }
+    test_mock::unset(pane, key);
     #[cfg(all(windows, not(test)))]
     super::windows::set(pane, key, None);
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), not(test)))]
     let _ = run_tmux(&["set", "-t", pane, "-p", "-u", key]);
 }
 
 pub fn get_pane_option_value(pane: &str, key: &str) -> String {
     #[cfg(test)]
-    if let Some(value) = test_mock::intercept_get(pane, key) {
-        return value;
+    {
+        test_mock::get(pane, key).unwrap_or_default()
     }
     #[cfg(all(windows, not(test)))]
-    return super::windows::get(pane, key);
-    #[cfg(all(windows, test))]
-    return String::new();
-    #[cfg(not(windows))]
-    run_tmux(&["show", "-t", pane, "-pv", key])
-        .map(|s| s.trim().to_string())
-        .unwrap_or_default()
+    {
+        super::windows::get(pane, key)
+    }
+    #[cfg(all(not(windows), not(test)))]
+    {
+        run_tmux(&["show", "-t", pane, "-pv", key])
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default()
+    }
 }
 
-/// Per-thread in-memory tmux pane store used by tests. Activated by
-/// installing a mock with [`test_mock::install`]; until then, all
-/// `set/unset/get_pane_option*` calls fall through to the real `tmux`
-/// command. The whole module is `cfg(test)` so it has zero cost in
-/// release builds.
+pub(crate) fn sync_project_identity(pane: &str, session_id: Option<&str>, project_dir: &str) {
+    let session_id = session_id.filter(|id| !id.is_empty());
+    let previous_session = get_pane_option_value(pane, PANE_SESSION_ID);
+    let new_session = session_id.is_some_and(|id| id != previous_session);
+    if new_session || get_pane_option_value(pane, PANE_PROJECT_DIR).is_empty() {
+        if project_dir.is_empty() {
+            unset_pane_option(pane, PANE_PROJECT_DIR);
+        } else {
+            set_pane_option(pane, PANE_PROJECT_DIR, project_dir);
+        }
+    }
+    if let Some(id) = session_id {
+        set_pane_option(pane, PANE_SESSION_ID, id);
+    }
+}
+
+/// Per-thread pane-option store for unit tests. Without an installed store,
+/// writes are ignored and reads are empty; unit tests never invoke real tmux.
 #[cfg(test)]
 pub mod test_mock {
     use std::cell::RefCell;
@@ -235,8 +244,7 @@ pub mod test_mock {
         });
     }
 
-    /// Read a pane option from the mock store. Returns `None` if no mock
-    /// is installed (so production code paths still hit real tmux).
+    /// Read a pane option, or return `None` when no store is installed.
     pub fn get(pane: &str, key: &str) -> Option<String> {
         MOCK.with(|m| {
             m.borrow().as_ref().map(|store| {
@@ -258,36 +266,11 @@ pub mod test_mock {
         })
     }
 
-    pub(super) fn intercept_set(pane: &str, key: &str, value: &str) -> bool {
-        MOCK.with(|m| {
-            if let Some(store) = m.borrow_mut().as_mut() {
-                store.insert((pane.to_string(), key.to_string()), value.to_string());
-                true
-            } else {
-                false
-            }
-        })
-    }
-
-    pub(super) fn intercept_unset(pane: &str, key: &str) -> bool {
+    pub(super) fn unset(pane: &str, key: &str) {
         MOCK.with(|m| {
             if let Some(store) = m.borrow_mut().as_mut() {
                 store.remove(&(pane.to_string(), key.to_string()));
-                true
-            } else {
-                false
             }
-        })
-    }
-
-    pub(super) fn intercept_get(pane: &str, key: &str) -> Option<String> {
-        MOCK.with(|m| {
-            m.borrow().as_ref().map(|store| {
-                store
-                    .get(&(pane.to_string(), key.to_string()))
-                    .cloned()
-                    .unwrap_or_default()
-            })
         })
     }
 }

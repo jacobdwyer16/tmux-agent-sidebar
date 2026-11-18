@@ -62,12 +62,8 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
         .unwrap_or_default();
 
     let existing_sidebar = panes_output.lines().find_map(|line| {
-        let parts: Vec<&str> = line.splitn(2, '|').collect();
-        if parts.len() >= 2 && parts[1] == "sidebar" {
-            Some(parts[0].to_string())
-        } else {
-            None
-        }
+        let (pane, role) = line.split_once('|')?;
+        (role == "sidebar").then(|| pane.to_string())
     });
 
     if let Some(sidebar_pane) = existing_sidebar {
@@ -77,11 +73,10 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
         if let Some(target) = panes_output.lines().find_map(|line| {
             let (pane, role) = line.split_once('|')?;
             (role != "sidebar").then_some(pane)
-        }) {
-            if let Err(error) = tmux::run_tmux_capture(&["select-pane", "-t", target]) {
-                eprintln!("cannot focus terminal before closing sidebar: {error}");
-                return 1;
-            }
+        }) && let Err(error) = tmux::run_tmux_capture(&["select-pane", "-t", target])
+        {
+            eprintln!("cannot focus terminal before closing sidebar: {error}");
+            return 1;
         }
         if let Err(error) = close_sidebar(&sidebar_pane) {
             eprintln!("cannot close sidebar: {error}");
@@ -164,20 +159,17 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
 
 pub(crate) fn cmd_toggle_all(_args: &[String]) -> i32 {
     let pane_id_role_format = pane_id_role_format();
-    let has_sidebar = tmux::run_tmux(&["list-panes", "-a", "-F", &pane_id_role_format])
-        .map(|output| any_sidebar_pane(&output))
-        .unwrap_or(false);
-
-    if has_sidebar {
-        let all_panes =
-            tmux::run_tmux(&["list-panes", "-a", "-F", &pane_id_role_format]).unwrap_or_default();
+    let Some(all_panes) = tmux::run_tmux(&["list-panes", "-a", "-F", &pane_id_role_format]) else {
+        eprintln!("cannot list panes before toggling sidebars");
+        return 1;
+    };
+    if any_sidebar_pane(&all_panes) {
         for line in all_panes.lines() {
-            let parts: Vec<&str> = line.splitn(2, '|').collect();
-            if parts.len() >= 2 && parts[1] == "sidebar" {
-                if let Err(error) = close_sidebar(parts[0]) {
-                    eprintln!("cannot close sidebar: {error}");
-                    return 1;
-                }
+            if let Some((pane, "sidebar")) = line.split_once('|')
+                && let Err(error) = close_sidebar(pane)
+            {
+                eprintln!("cannot close sidebar: {error}");
+                return 1;
             }
         }
     } else {

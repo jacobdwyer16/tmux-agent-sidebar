@@ -1,4 +1,5 @@
 use crate::event::{AgentEvent, resolve_adapter};
+use crate::tmux;
 
 use super::{read_stdin_json, tmux_pane};
 
@@ -35,25 +36,25 @@ pub(crate) fn cmd_hook(args: &[String]) -> i32 {
     };
 
     let result = handle_event(&pane, agent_name, event);
-    if result == 0 {
-        if let Some(model) = input.get("model").and_then(serde_json::Value::as_str) {
-            crate::tmux::set_pane_option(&pane, "@pane_model", model);
-        }
-        if let Some(name) = input.get("agent_name").and_then(serde_json::Value::as_str) {
-            if !name.is_empty() {
-                crate::tmux::set_pane_option(&pane, crate::tmux::PANE_NAME, name);
-            }
-        }
+    if result != 0 {
+        return result;
     }
-    if result == 0 && agent_name == "codex" {
-        if let Some(path) = input
+    if let Some(model) = input.get("model").and_then(serde_json::Value::as_str) {
+        tmux::set_pane_option(&pane, "@pane_model", model);
+    }
+    if let Some(name) = input.get("agent_name").and_then(serde_json::Value::as_str)
+        && !name.is_empty()
+    {
+        tmux::set_pane_option(&pane, tmux::PANE_NAME, name);
+    }
+    if agent_name == "codex"
+        && let Some(path) = input
             .get("transcript_path")
             .and_then(serde_json::Value::as_str)
-        {
-            crate::tmux::set_pane_option(&pane, crate::codex::TRANSCRIPT_OPTION, path);
-        }
+    {
+        tmux::set_pane_option(&pane, crate::codex::TRANSCRIPT_OPTION, path);
     }
-    result
+    0
 }
 
 // ─── event handler ──────────────────────────────────────────────────────────

@@ -133,13 +133,12 @@ fn apply_record(state: &mut TranscriptState, record: &Value) -> Result<(), Strin
                     state.reason = "Answer required".into();
                 }
             }
-            Some("function_call_output" | "custom_tool_call_output") => {
+            Some("function_call_output" | "custom_tool_call_output")
                 if state.pending_input.remove(&text(payload, "call_id"))
-                    && state.pending_input.is_empty()
-                {
-                    state.status = Some(PaneStatus::Running);
-                    state.reason.clear();
-                }
+                    && state.pending_input.is_empty() =>
+            {
+                state.status = Some(PaneStatus::Running);
+                state.reason.clear();
             }
             _ => {}
         },

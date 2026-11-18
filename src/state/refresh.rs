@@ -91,30 +91,6 @@ impl AppState {
         self.find_focused_pane();
     }
 
-    fn clear_dead_agent_metadata(pane_id: &str) {
-        for key in &[
-            tmux::PANE_AGENT,
-            tmux::PANE_STATUS,
-            tmux::PANE_ATTENTION,
-            tmux::PANE_PROMPT,
-            tmux::PANE_PROMPT_SOURCE,
-            tmux::PANE_SUBAGENTS,
-            tmux::PANE_CWD,
-            tmux::PANE_PROJECT_DIR,
-            tmux::PANE_PERMISSION_MODE,
-            tmux::PANE_WORKTREE_NAME,
-            tmux::PANE_WORKTREE_BRANCH,
-            tmux::PANE_STARTED_AT,
-            tmux::PANE_WAIT_REASON,
-            tmux::PANE_SESSION_ID,
-            tmux::PANE_BG_CMD,
-        ] {
-            tmux::unset_pane_option(pane_id, key);
-        }
-
-        let _ = std::fs::remove_file(activity::log_file_path(pane_id));
-    }
-
     fn filter_sessions_to_live_agent_panes(
         sessions: Vec<SessionInfo>,
         live_agent_panes: &HashSet<String>,
@@ -233,7 +209,7 @@ impl AppState {
                 pane_state.command = command;
             }
             for pane_id in dead_panes {
-                Self::clear_dead_agent_metadata(&pane_id);
+                tmux::clear_agent_pane_state(&pane_id);
                 self.clear_pane_state(&pane_id);
             }
             self.timers.port_scan_initialized = true;
@@ -843,7 +819,7 @@ mod tests {
         ] {
             tmux::test_mock::set(pane, key, "stale");
         }
-        AppState::clear_dead_agent_metadata(pane);
+        tmux::clear_agent_pane_state(pane);
         for key in [
             tmux::PANE_PROJECT_DIR,
             tmux::PANE_CWD,
