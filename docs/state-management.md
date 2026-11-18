@@ -36,6 +36,7 @@ Pane options written to tmux:
 | `@pane_agent` | SessionStart | Agent type ("claude" / "codex" / "opencode") |
 | `@pane_status` | Every event | Status ("running" / "background" / "waiting" / "idle" / "error") |
 | `@pane_cwd` | SessionStart, CwdChanged | Working directory |
+| `@pane_project_dir` | First location event or a different agent session | Starting project directory used for grouping. Remains stable across scratchpad visits, resume, and compaction; Claude's `CLAUDE_PROJECT_DIR` supplies the original project when available. |
 | `@pane_permission_mode` | SessionStart, hook event | Permission mode |
 | `@pane_prompt` | UserPromptSubmit, Stop | Latest prompt or response text |
 | `@pane_prompt_source` | UserPromptSubmit, Stop | "user" or "response" |

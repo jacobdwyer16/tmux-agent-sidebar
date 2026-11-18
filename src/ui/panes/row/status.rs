@@ -20,10 +20,16 @@ pub(super) fn status_row(
     let icon_color =
         pulse_color.unwrap_or_else(|| theme.status_color(&pane.status, pane.attention));
     let model = compact_model(&pane.model);
-    let name = if pane.session_name.is_empty() {
-        pane.agent.label()
+    let name = if !pane.tmux_session_name.is_empty() {
+        if pane.session_name.is_empty() {
+            format!("[{}]", pane.tmux_session_name)
+        } else {
+            format!("[{}] {}", pane.tmux_session_name, pane.session_name)
+        }
+    } else if pane.session_name.is_empty() {
+        pane.agent.label().to_string()
     } else {
-        &pane.session_name
+        pane.session_name.clone()
     };
     let fixed_width = display_width(icon) + 2;
     let elapsed = elapsed_label(pane.started_at, now);
@@ -32,9 +38,23 @@ pub(super) fn status_row(
         .inner_width
         .saturating_sub(fixed_width + elapsed_reserved);
     let model_budget =
-        display_width(&model).min(available.saturating_sub(display_width(name).min(6)));
+        display_width(&model).min(available.saturating_sub(display_width(&name).min(6)));
     let model = truncate_to_width(&model, model_budget);
-    let name = truncate_to_width(name, available.saturating_sub(display_width(&model)));
+    let name_budget = available.saturating_sub(display_width(&model));
+    let name = if !pane.tmux_session_name.is_empty() && name_budget >= 2 {
+        let mut label = format!(
+            "[{}]",
+            truncate_to_width(&pane.tmux_session_name, name_budget - 2)
+        );
+        let remaining = name_budget.saturating_sub(display_width(&label));
+        if remaining > 1 && !pane.session_name.is_empty() {
+            label.push(' ');
+            label.push_str(&truncate_to_width(&pane.session_name, remaining - 1));
+        }
+        label
+    } else {
+        truncate_to_width(&name, name_budget)
+    };
     let left_width = fixed_width + display_width(&model) + display_width(&name);
     let elapsed = if display_width(&elapsed) < ctx.inner_width.saturating_sub(left_width) {
         elapsed

@@ -128,6 +128,9 @@ The installed executable is `bin/tmux-agent-sidebar.exe`.
 - Windows close requests stop the sidebar's refresh loop before its pane exits,
   preventing transient deleted-pane errors when closing a focused sidebar.
 - `prefix + E` toggles sidebars across windows.
+- Agent rows show the tmux session name in brackets beside the model. Project
+  groups stay pinned to the agent session's starting project while temporary
+  scratchpad visits continue to update its live working-directory metadata.
 - The bottom Git/Activity panel is hidden in the local Windows configuration.
 - Inside the sidebar, `j`/`k` select agents, `l` or Enter opens the selected agent,
   and `h` returns to the previously focused terminal. `r` opens the repo picker;

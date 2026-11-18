@@ -49,7 +49,6 @@ pub(in crate::cli::hook) fn run_session_end_teardown(pane: &str) {
 /// and deferred paths.
 pub(in crate::cli::hook) fn run_worktree_remove_teardown(pane: &str) {
     sync_worktree_meta(pane, &None);
-    // Clear hook-set cwd so query_sessions() falls back to
-    // pane_current_path, avoiding stale worktree path association.
+    // drop the removed worktree's live path while retaining session identity.
     tmux::unset_pane_option(pane, tmux::PANE_CWD);
 }

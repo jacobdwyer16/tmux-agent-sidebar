@@ -100,6 +100,7 @@ impl AppState {
             tmux::PANE_PROMPT_SOURCE,
             tmux::PANE_SUBAGENTS,
             tmux::PANE_CWD,
+            tmux::PANE_PROJECT_DIR,
             tmux::PANE_PERMISSION_MODE,
             tmux::PANE_WORKTREE_NAME,
             tmux::PANE_WORKTREE_BRANCH,
@@ -486,6 +487,7 @@ mod tests {
             worktree: WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            tmux_session_name: String::new(),
             model: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
@@ -828,6 +830,27 @@ mod tests {
         let filtered = AppState::filter_sessions_to_live_agent_panes(sessions, &live);
 
         assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn dead_agent_cleanup_removes_the_project_anchor() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%DEAD_PROJECT";
+        for key in [
+            tmux::PANE_PROJECT_DIR,
+            tmux::PANE_CWD,
+            tmux::PANE_SESSION_ID,
+        ] {
+            tmux::test_mock::set(pane, key, "stale");
+        }
+        AppState::clear_dead_agent_metadata(pane);
+        for key in [
+            tmux::PANE_PROJECT_DIR,
+            tmux::PANE_CWD,
+            tmux::PANE_SESSION_ID,
+        ] {
+            assert!(!tmux::test_mock::contains(pane, key));
+        }
     }
 
     // ─── refresh_session_names ──────────────────────────────────────

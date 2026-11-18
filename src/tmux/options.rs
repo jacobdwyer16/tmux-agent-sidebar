@@ -20,9 +20,10 @@ pub const PANE_NAME: &str = "@pane_name";
 /// Visual attention flag (`notification` / `clear`) that lights up
 /// the row when a hook wants the user's eye.
 pub const PANE_ATTENTION: &str = "@pane_attention";
-/// Hook-reported working directory, preferred over tmux's
-/// `pane_current_path` for repo grouping.
+/// Current working directory reported by the agent's hooks.
 pub const PANE_CWD: &str = "@pane_cwd";
+/// Starting project directory, stable for the lifetime of an agent session.
+pub const PANE_PROJECT_DIR: &str = "@pane_project_dir";
 /// Latest backgrounded Bash command (sanitized). Presence is the
 /// authoritative "live shell" signal: Stop routes to `background`
 /// while this is set, and the sidebar surfaces the command text.

@@ -52,6 +52,7 @@ pub(in crate::cli::hook) fn sync_pane_location(
     cwd: &str,
     worktree: &Option<WorktreeInfo>,
     session_id: &Option<String>,
+    project_dir: Option<&str>,
 ) {
     // Subagents share the parent's $TMUX_PANE and can fire their own hook
     // events with a different session_id, cwd, or worktree. While children
@@ -62,15 +63,38 @@ pub(in crate::cli::hook) fn sync_pane_location(
     if !should_update_cwd(&current_subagents) {
         return;
     }
-    match session_id.as_deref() {
-        Some(sid) if !sid.is_empty() => tmux::set_pane_option(pane, tmux::PANE_SESSION_ID, sid),
-        _ => tmux::unset_pane_option(pane, tmux::PANE_SESSION_ID),
+    let previous_session = tmux::get_pane_option_value(pane, tmux::PANE_SESSION_ID);
+    let previous_project = tmux::get_pane_option_value(pane, tmux::PANE_PROJECT_DIR);
+    let session_id = session_id.as_deref().filter(|sid| !sid.is_empty());
+    let new_session = session_id.is_some_and(|sid| sid != previous_session);
+    if previous_project.is_empty() || new_session {
+        let project = project_dir
+            .filter(|directory| !directory.is_empty())
+            .unwrap_or_else(|| resolve_cwd(cwd, worktree));
+        if project.is_empty() {
+            tmux::unset_pane_option(pane, tmux::PANE_PROJECT_DIR);
+        } else {
+            tmux::set_pane_option(pane, tmux::PANE_PROJECT_DIR, project);
+        }
+    }
+    if let Some(sid) = session_id {
+        tmux::set_pane_option(pane, tmux::PANE_SESSION_ID, sid);
     }
     if !cwd.is_empty() {
-        let effective_cwd = resolve_cwd(cwd, worktree);
-        tmux::set_pane_option(pane, tmux::PANE_CWD, effective_cwd);
+        tmux::set_pane_option(pane, tmux::PANE_CWD, cwd);
     }
     sync_worktree_meta(pane, worktree);
+}
+
+pub(in crate::cli::hook) fn project_dir_for_agent(agent: &str) -> Option<String> {
+    if agent != tmux::CLAUDE_AGENT {
+        return None;
+    }
+    std::env::var_os("CLAUDE_PROJECT_DIR").map(|directory| {
+        directory
+            .into_string()
+            .expect("project directory must be Unicode")
+    })
 }
 
 /// Returns true if pane-scoped writes from this hook event are safe to
@@ -133,6 +157,7 @@ mod tests {
         let pane = "%PARENT";
         // Parent state: real worktree owned by the parent agent.
         tmux::test_mock::set(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
+        tmux::test_mock::set(pane, tmux::PANE_PROJECT_DIR, "/repo/parent");
         tmux::test_mock::set(pane, tmux::PANE_WORKTREE_NAME, "parent-feat");
         tmux::test_mock::set(pane, tmux::PANE_WORKTREE_BRANCH, "feat/parent");
         tmux::test_mock::set(pane, tmux::PANE_CWD, "/repo/parent");
@@ -150,12 +175,17 @@ mod tests {
             "/repo/child",
             &child_wt,
             &Some("child-session".into()),
+            None,
         );
 
         assert_eq!(
             tmux::test_mock::get(pane, tmux::PANE_WORKTREE_NAME).as_deref(),
             Some("parent-feat"),
             "worktree name must not leak from subagent into parent"
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_PROJECT_DIR).as_deref(),
+            Some("/repo/parent")
         );
         assert_eq!(
             tmux::test_mock::get(pane, tmux::PANE_WORKTREE_BRANCH).as_deref(),
@@ -182,7 +212,7 @@ mod tests {
             original_repo_dir: "/repo".into(),
         });
 
-        sync_pane_location(pane, "/wt/feat-x", &wt, &Some("sess-1".into()));
+        sync_pane_location(pane, "/wt/feat-x", &wt, &Some("sess-1".into()), None);
 
         assert_eq!(
             tmux::test_mock::get(pane, tmux::PANE_WORKTREE_NAME).as_deref(),
@@ -192,9 +222,12 @@ mod tests {
             tmux::test_mock::get(pane, tmux::PANE_WORKTREE_BRANCH).as_deref(),
             Some("feat-x")
         );
-        // resolve_cwd routes the original_repo_dir into @pane_cwd.
         assert_eq!(
             tmux::test_mock::get(pane, tmux::PANE_CWD).as_deref(),
+            Some("/wt/feat-x")
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_PROJECT_DIR).as_deref(),
             Some("/repo")
         );
         assert_eq!(
@@ -255,5 +288,82 @@ mod tests {
         assert!(pane_writes_allowed(pane));
         tmux::test_mock::set(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
         assert!(!pane_writes_allowed(pane));
+    }
+
+    #[test]
+    fn scratchpad_and_resumed_events_preserve_project_and_session_identity() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%SCRATCH";
+        let session = Some("session-1".into());
+        sync_pane_location(pane, "/repo", &None, &session, Some("/repo"));
+        for cwd in ["/tmp/claude/encoded/session-1/scratchpad", "/other/folder"] {
+            sync_pane_location(pane, cwd, &None, &session, Some("/repo"));
+            assert_eq!(
+                tmux::test_mock::get(pane, tmux::PANE_PROJECT_DIR).as_deref(),
+                Some("/repo")
+            );
+            assert_eq!(
+                tmux::test_mock::get(pane, tmux::PANE_CWD).as_deref(),
+                Some(cwd)
+            );
+        }
+        sync_pane_location(pane, "/third/folder", &None, &None, None);
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_SESSION_ID).as_deref(),
+            Some("session-1")
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_PROJECT_DIR).as_deref(),
+            Some("/repo")
+        );
+    }
+
+    #[test]
+    fn new_session_in_same_pane_replaces_project_anchor() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%REUSED";
+        sync_pane_location(pane, "/first", &None, &Some("first".into()), None);
+        sync_pane_location(
+            pane,
+            "/tmp/second/scratchpad",
+            &None,
+            &Some("second".into()),
+            Some("/second"),
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_PROJECT_DIR).as_deref(),
+            Some("/second")
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_CWD).as_deref(),
+            Some("/tmp/second/scratchpad")
+        );
+    }
+
+    #[test]
+    fn worktree_changes_keep_project_anchor_and_update_branch_context() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%WORKTREE";
+        let session = Some("worktree-session".into());
+        sync_pane_location(pane, "/repo", &None, &session, None);
+        let worktree = Some(WorktreeInfo {
+            path: "/worktrees/feature".into(),
+            name: "feature".into(),
+            branch: "feature".into(),
+            original_repo_dir: "/repo".into(),
+        });
+        sync_pane_location(pane, "/worktrees/feature", &worktree, &session, None);
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_PROJECT_DIR).as_deref(),
+            Some("/repo")
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_WORKTREE_BRANCH).as_deref(),
+            Some("feature")
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_CWD).as_deref(),
+            Some("/worktrees/feature")
+        );
     }
 }

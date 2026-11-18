@@ -17,6 +17,10 @@ pub(in crate::cli::hook) fn on_session_start(
     ctx: &AgentContext<'_>,
     source: &str,
 ) -> i32 {
+    if source == "startup" && ctx.session_id.is_none() && pane_writes_allowed(pane) {
+        tmux::unset_pane_option(pane, tmux::PANE_PROJECT_DIR);
+        tmux::unset_pane_option(pane, tmux::PANE_SESSION_ID);
+    }
     set_agent_meta(pane, ctx);
     set_attention(pane, "clear");
     clear_run_state(pane);
@@ -257,6 +261,35 @@ mod tests {
             tmux::test_mock::get(pane, tmux::PANE_WAIT_REASON).as_deref(),
             Some("session_resumed"),
         );
+    }
+
+    #[test]
+    fn resume_and_compaction_keep_project_until_session_end() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%RESUME_PROJECT";
+        let session_id = Some("stable-session".into());
+        let mut ctx = AgentContext {
+            agent: "codex",
+            cwd: "/repo",
+            permission_mode: "default",
+            worktree: &None,
+            session_id: &session_id,
+        };
+        on_session_start(pane, &ctx, "startup");
+        ctx.cwd = "/tmp/scratchpad";
+        for source in ["resume", "compact"] {
+            on_session_start(pane, &ctx, source);
+            assert_eq!(
+                tmux::get_pane_option_value(pane, tmux::PANE_PROJECT_DIR),
+                "/repo"
+            );
+            assert_eq!(
+                tmux::get_pane_option_value(pane, tmux::PANE_CWD),
+                "/tmp/scratchpad"
+            );
+        }
+        on_session_end(pane, "codex", "clear", &default_notifications());
+        assert!(tmux::get_pane_option_value(pane, tmux::PANE_PROJECT_DIR).is_empty());
     }
 
     #[test]

@@ -23,6 +23,8 @@ pub struct PaneInfo {
     pub worktree: WorktreeMetadata,
     pub session_id: Option<String>,
     pub session_name: String,
+    /// tmux session containing this pane, independent of the agent's conversation name.
+    pub tmux_session_name: String,
     pub model: String,
     /// `true` when the window this pane lives in was created by the
     /// sidebar's spawn flow (via the `@agent-sidebar-spawned` window

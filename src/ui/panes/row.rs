@@ -132,6 +132,7 @@ mod tests {
             worktree: WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            tmux_session_name: String::new(),
             model: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
@@ -154,6 +155,27 @@ mod tests {
             bg: None,
             active,
         }
+    }
+
+    #[test]
+    fn status_row_identifies_tmux_sessions_at_sidebar_width() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 38, false);
+        let mut pane = pane(PermissionMode::Default, PaneStatus::Idle, "");
+        pane.model = "claude-opus-4-7".into();
+        let mut rows = Vec::new();
+        for session in ["eia", "power"] {
+            pane.tmux_session_name = session.into();
+            rows.push(
+                line_text(&status_row(&pane, &ctx, &StatusIcons::default(), 0, 0))
+                    .trim_end()
+                    .to_string(),
+            );
+        }
+        insta::assert_snapshot!(rows.join("\n"), @"
+        ○ Opus 4.7 [eia]
+        ○ Opus 4.7 [power]
+        ");
     }
 
     #[test]

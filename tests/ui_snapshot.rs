@@ -9,6 +9,56 @@ use tmux_agent_sidebar::tmux::{
     AgentType, PaneInfo, PaneStatus, PermissionMode, SessionInfo, WindowInfo, WorktreeMetadata,
 };
 
+#[test]
+fn snapshot_same_project_agents_show_distinct_tmux_sessions() {
+    let mut first = make_pane(AgentType::Claude, PaneStatus::Running);
+    first.tmux_session_name = "eia".into();
+    first.model = "claude-opus-4-7".into();
+    first.pane_id = "eia:0.%1".into();
+    let mut second = make_pane(AgentType::Codex, PaneStatus::Idle);
+    second.tmux_session_name = "power".into();
+    second.model = "gpt-6.1-sol".into();
+    second.pane_id = "power:0.%1".into();
+    let mut state = make_state(vec![
+        SessionInfo {
+            session_name: "eia".into(),
+            windows: vec![WindowInfo {
+                window_id: "eia:0".into(),
+                window_name: "project".into(),
+                window_active: true,
+                auto_rename: false,
+                panes: vec![first.clone()],
+            }],
+        },
+        SessionInfo {
+            session_name: "power".into(),
+            windows: vec![WindowInfo {
+                window_id: "power:0".into(),
+                window_name: "project".into(),
+                window_active: true,
+                auto_rename: false,
+                panes: vec![second.clone()],
+            }],
+        },
+    ]);
+    state.repo_groups = vec![make_repo_group("eia-930-data-extract", vec![first, second])];
+    state.bottom_panel_height = 5;
+    state.focus_state.focused_pane_id = Some("eia:0.%1".into());
+    state.rebuild_row_targets();
+    let output = render_to_string(&mut state, 42, 16);
+    insta::assert_snapshot!(output, @"
+     ≡ 2     ● 1     ◎ 0    ◐ 0    ○ 1    ✕ 0
+    ⓘ                                      — ▾
+    eia-930-data-extract
+    ┃ ● Opus 4.7 [eia]
+      ○ gpt-6.1-sol [power]
+        Waiting for prompt…
+    ╭ Activity │ Git ────────────────────────╮
+    │             No activity yet            │
+    ╰────────────────────────────────────────╯
+    ");
+}
+
 // ─── UI Snapshot Tests ─────────────────────────────────────────────
 
 #[test]
@@ -306,6 +356,7 @@ fn snapshot_two_agents_same_window_ui() {
         worktree: WorktreeMetadata::default(),
         session_id: None,
         session_name: String::new(),
+        tmux_session_name: String::new(),
         model: String::new(),
         sidebar_spawned: false,
         bg_shell_cmd: None,
@@ -328,6 +379,7 @@ fn snapshot_two_agents_same_window_ui() {
         worktree: WorktreeMetadata::default(),
         session_id: None,
         session_name: String::new(),
+        tmux_session_name: String::new(),
         model: String::new(),
         sidebar_spawned: false,
         bg_shell_cmd: None,

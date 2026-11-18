@@ -1,4 +1,4 @@
-use super::location::{pane_writes_allowed, sync_pane_location};
+use super::location::{pane_writes_allowed, project_dir_for_agent, sync_pane_location};
 use super::pending::{PENDING_SESSION_END, PENDING_WORKTREE_REMOVE};
 use crate::event::WorktreeInfo;
 use crate::tmux;
@@ -40,7 +40,14 @@ pub(in crate::cli::hook) fn set_agent_meta(pane: &str, ctx: &AgentContext<'_>) {
     if !ctx.permission_mode.is_empty() && pane_writes_allowed(pane) {
         tmux::set_pane_option(pane, tmux::PANE_PERMISSION_MODE, ctx.permission_mode);
     }
-    sync_pane_location(pane, ctx.cwd, ctx.worktree, ctx.session_id);
+    let project_dir = project_dir_for_agent(ctx.agent);
+    sync_pane_location(
+        pane,
+        ctx.cwd,
+        ctx.worktree,
+        ctx.session_id,
+        project_dir.as_deref(),
+    );
 }
 
 pub(in crate::cli::hook) fn clear_run_state(pane: &str) {
@@ -64,6 +71,7 @@ pub(in crate::cli::hook) fn clear_all_meta(pane: &str) {
         tmux::PANE_BG_CMD,
         tmux::PANE_SUBAGENTS,
         tmux::PANE_CWD,
+        tmux::PANE_PROJECT_DIR,
         tmux::PANE_PERMISSION_MODE,
         tmux::PANE_WORKTREE_NAME,
         tmux::PANE_WORKTREE_BRANCH,
@@ -270,6 +278,7 @@ mod tests {
             tmux::PANE_PROMPT_SOURCE,
             tmux::PANE_SUBAGENTS,
             tmux::PANE_CWD,
+            tmux::PANE_PROJECT_DIR,
             tmux::PANE_PERMISSION_MODE,
             tmux::PANE_WORKTREE_NAME,
             tmux::PANE_WORKTREE_BRANCH,
@@ -290,6 +299,7 @@ mod tests {
             tmux::PANE_PROMPT_SOURCE,
             tmux::PANE_SUBAGENTS,
             tmux::PANE_CWD,
+            tmux::PANE_PROJECT_DIR,
             tmux::PANE_PERMISSION_MODE,
             tmux::PANE_WORKTREE_NAME,
             tmux::PANE_WORKTREE_BRANCH,

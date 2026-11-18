@@ -24,6 +24,7 @@ fn pane(id: &str) -> PaneInfo {
         worktree: tmux::WorktreeMetadata::default(),
         session_id: None,
         session_name: String::new(),
+        tmux_session_name: String::new(),
         model: String::new(),
         sidebar_spawned: false,
         bg_shell_cmd: None,

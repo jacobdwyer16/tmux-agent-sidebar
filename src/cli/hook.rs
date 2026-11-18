@@ -191,7 +191,8 @@ fn handle_event(pane: &str, agent_name: &str, event: AgentEvent) -> i32 {
             session_id,
             ..
         } => {
-            sync_pane_location(pane, &cwd, &worktree, &session_id);
+            let project_dir = context::project_dir_for_agent(agent_name);
+            sync_pane_location(pane, &cwd, &worktree, &session_id, project_dir.as_deref());
             0
         }
         AgentEvent::TaskCreated { .. } => 0,

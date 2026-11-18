@@ -6,9 +6,9 @@ use crate::process::{CODEX_HOST, ProcessSnapshot, command_basename};
 use super::commands::run_tmux;
 use super::options::{
     PANE_AGENT, PANE_ATTENTION, PANE_BG_CMD, PANE_CWD, PANE_NAME, PANE_PENDING_SESSION_END,
-    PANE_PENDING_WORKTREE_REMOVE, PANE_PERMISSION_MODE, PANE_PROMPT, PANE_PROMPT_SOURCE, PANE_ROLE,
-    PANE_SESSION_ID, PANE_STARTED_AT, PANE_STATUS, PANE_SUBAGENTS, PANE_WAIT_REASON,
-    PANE_WORKTREE_BRANCH, PANE_WORKTREE_NAME, unset_pane_option,
+    PANE_PENDING_WORKTREE_REMOVE, PANE_PERMISSION_MODE, PANE_PROJECT_DIR, PANE_PROMPT,
+    PANE_PROMPT_SOURCE, PANE_ROLE, PANE_SESSION_ID, PANE_STARTED_AT, PANE_STATUS, PANE_SUBAGENTS,
+    PANE_WAIT_REASON, PANE_WORKTREE_BRANCH, PANE_WORKTREE_NAME, unset_pane_option,
 };
 use super::types::{
     AgentType, CODEX_AGENT, PaneInfo, PaneStatus, PermissionMode, SessionInfo, WindowInfo,
@@ -57,6 +57,7 @@ pub(super) mod pane_line_field {
     pub const SESSION_ID: usize = 19; // absolute 25 (@pane_session_id)
     pub const SIDEBAR_SPAWNED: usize = 20; // absolute 26 (@agent-sidebar-spawned)
     pub const BG_CMD: usize = 21; // absolute 27 (@pane_bg_cmd)
+    pub const PROJECT_DIR: usize = 23; // absolute 29 (@pane_project_dir)
     /// Minimum number of fields the pane-line suffix must contain.
     /// Equals `session_line_field::MIN_FIELDS - PANE_LINE_OFFSET`.
     pub const MIN_FIELDS: usize = 22;
@@ -96,6 +97,7 @@ fn pane_format() -> String {
         q(SPAWNED_OPTION),
         q(PANE_BG_CMD),
         q("@pane_model"),
+        q(PANE_PROJECT_DIR),
     ]
     .join("|")
 }
@@ -184,7 +186,8 @@ fn build_session_hierarchy(
                 panes: Vec::new(),
             });
 
-        if let Some(pane) = parse_pane_fields_with_processes(pane_fields, process_snapshot) {
+        if let Some(mut pane) = parse_pane_fields_with_processes(pane_fields, process_snapshot) {
+            pane.tmux_session_name = session_name.to_string();
             if pane.agent == AgentType::Codex
                 && let Some(pid) = pane.pane_pid
             {
@@ -302,9 +305,15 @@ fn parse_pane_fields_with_processes(
         }
     }
 
-    // Prefer @pane_cwd (set by hook from agent's cwd) over pane_current_path
+    // project identity stays stable while hooks continue tracking the live cwd.
     let pane_cwd = &parts[pane_line_field::PANE_CWD];
-    let path = if !pane_cwd.is_empty() {
+    let project_dir = parts
+        .get(pane_line_field::PROJECT_DIR)
+        .map(String::as_str)
+        .unwrap_or("");
+    let path = if !project_dir.is_empty() {
+        project_dir.to_string()
+    } else if !pane_cwd.is_empty() {
         pane_cwd.to_string()
     } else {
         parts[pane_line_field::PANE_CURRENT_PATH].to_string()
@@ -355,6 +364,7 @@ fn parse_pane_fields_with_processes(
         },
         session_id,
         session_name: parts.get(4).cloned().unwrap_or_default(),
+        tmux_session_name: String::new(),
         model: parts
             .get(pane_line_field::MIN_FIELDS)
             .cloned()
@@ -390,6 +400,7 @@ fn clear_agent_pane_state(pane_id: &str) {
         PANE_BG_CMD,
         PANE_SUBAGENTS,
         PANE_CWD,
+        PANE_PROJECT_DIR,
         PANE_PERMISSION_MODE,
         PANE_WORKTREE_NAME,
         PANE_WORKTREE_BRANCH,
@@ -635,6 +646,7 @@ mod tests {
             worktree: WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            tmux_session_name: String::new(),
             model: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
@@ -855,6 +867,29 @@ mod tests {
         assert_eq!(pane.pane_pid, Some(12345));
         assert_eq!(pane.subagents, vec!["Explore", "Plan"]);
         assert_eq!(pane.permission_mode, PermissionMode::Auto);
+    }
+
+    #[test]
+    fn project_directory_keeps_scratchpad_agent_in_its_original_group() {
+        let mut fields = full_fields();
+        fields.resize(24, "");
+        *fields
+            .get_mut(pane_line_field::PROJECT_DIR)
+            .expect("project field") = "/workspace/eia-930-data-extract";
+        *fields
+            .get_mut(pane_line_field::SESSION_ID)
+            .expect("session field") = "stable-agent-session";
+        for cwd in [
+            "/workspace/eia-930-data-extract",
+            "/tmp/claude/C--Users-Jacob-eia-930-data-extract/session/scratchpad",
+        ] {
+            *fields
+                .get_mut(pane_line_field::PANE_CWD)
+                .expect("cwd field") = cwd;
+            let pane = parse_pane_line(&make_pane_line(&fields)).expect("valid pane fields");
+            assert_eq!(pane.path, "/workspace/eia-930-data-extract");
+            assert_eq!(pane.session_id.as_deref(), Some("stable-agent-session"));
+        }
     }
 
     #[test]
@@ -1249,6 +1284,7 @@ mod tests {
                     worktree: WorktreeMetadata::default(),
                     session_id: None,
                     session_name: String::new(),
+                    tmux_session_name: String::new(),
                     model: String::new(),
                     sidebar_spawned: false,
                     bg_shell_cmd: None,
@@ -1326,6 +1362,30 @@ mod tests {
         let pid_str = pane_pid.to_string();
         fields[19] = &pid_str; // pane_pid
         fields.join("|")
+    }
+
+    #[test]
+    fn hierarchy_keeps_tmux_session_distinct_from_agent_conversation_label() {
+        let line = make_full_pane_line("eia", 0);
+        let mut fields = split_tmux_fields(&line, '|');
+        *fields.get_mut(10).expect("agent label field") = "investigate-csv-aliases".into();
+        fields.resize(30, String::new());
+        *fields.get_mut(21).expect("cwd field") = "/tmp/claude/project/session/scratchpad".into();
+        *fields.get_mut(29).expect("project field") = "/workspace/eia-930-data-extract".into();
+        let (map, _) = build_session_hierarchy(&fields.join("|"), None);
+        let sessions = finalize_sessions(map);
+        let pane = sessions
+            .first()
+            .expect("session")
+            .windows
+            .first()
+            .expect("window")
+            .panes
+            .first()
+            .expect("pane");
+        assert_eq!(pane.tmux_session_name, "eia");
+        assert_eq!(pane.session_name, "investigate-csv-aliases");
+        assert_eq!(pane.path, "/workspace/eia-930-data-extract");
     }
 
     #[test]

@@ -54,6 +54,8 @@ fn update_report(pane: &str, agent: &str, input: &Value) -> Result<(), String> {
             tmux::PANE_SUBAGENTS,
             tmux::PANE_STARTED_AT,
             tmux::PANE_WAIT_REASON,
+            tmux::PANE_CWD,
+            tmux::PANE_PROJECT_DIR,
         ] {
             tmux::unset_pane_option(pane, key);
         }
@@ -82,6 +84,17 @@ fn update_report(pane: &str, agent: &str, input: &Value) -> Result<(), String> {
     if !id.is_empty() {
         tmux::set_pane_option(pane, tmux::PANE_SESSION_ID, id);
     }
+    if new_session {
+        tmux::unset_pane_option(pane, tmux::PANE_PROJECT_DIR);
+    }
+    if let Some(cwd) = input.get("cwd").and_then(Value::as_str)
+        && !cwd.is_empty()
+    {
+        tmux::set_pane_option(pane, tmux::PANE_CWD, cwd);
+        if tmux::get_pane_option_value(pane, tmux::PANE_PROJECT_DIR).is_empty() {
+            tmux::set_pane_option(pane, tmux::PANE_PROJECT_DIR, cwd);
+        }
+    }
     if let Some(model) = model_name(input) {
         tmux::set_pane_option(pane, "@pane_model", &sanitize_tmux_value(model));
     }
@@ -102,9 +115,6 @@ fn update_report(pane: &str, agent: &str, input: &Value) -> Result<(), String> {
                 format!("{agent}-{}", id.chars().take(8).collect::<String>())
             },
         );
-    }
-    if let Some(cwd) = input.get("cwd").and_then(Value::as_str) {
-        tmux::set_pane_option(pane, tmux::PANE_CWD, cwd);
     }
     if let Some(prompt) = input.get("prompt").and_then(Value::as_str) {
         tmux::set_pane_option(pane, tmux::PANE_PROMPT, &sanitize_tmux_value(prompt));
@@ -247,5 +257,40 @@ mod tests {
             tmux::get_pane_option_value("%REPORT", tmux::PANE_NAME),
             "researcher"
         );
+    }
+
+    #[test]
+    fn reports_pin_the_project_until_a_different_session_starts() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%REPORT_PROJECT";
+        for cwd in ["/repo", "/tmp/scratchpad"] {
+            update_report(
+                pane,
+                "pi",
+                &json!({
+                    "session_id": "first", "agent_state": "working", "cwd": cwd
+                }),
+            )
+            .expect("valid report");
+            assert_eq!(
+                tmux::get_pane_option_value(pane, tmux::PANE_PROJECT_DIR),
+                "/repo"
+            );
+            assert_eq!(tmux::get_pane_option_value(pane, tmux::PANE_CWD), cwd);
+        }
+        update_report(
+            pane,
+            "pi",
+            &json!({
+                "session_id": "second", "agent_state": "idle", "cwd": "/other"
+            }),
+        )
+        .expect("valid report");
+        assert_eq!(
+            tmux::get_pane_option_value(pane, tmux::PANE_PROJECT_DIR),
+            "/other"
+        );
+        update_report(pane, "pi", &json!({"agent_state": "stopped"})).expect("valid stop report");
+        assert!(tmux::get_pane_option_value(pane, tmux::PANE_PROJECT_DIR).is_empty());
     }
 }
