@@ -58,6 +58,55 @@ fn format_hook_command_quotes_unsafe_path() {
 }
 
 #[test]
+fn codex_executable_uses_powershell_invocation_and_literal_quoting() {
+    assert_eq!(
+        format_hook_command(
+            "C:\\Users\\O'Brien $work`\\sidebar.exe",
+            "codex",
+            "activity-log"
+        ),
+        "$OutputEncoding = [Text.UTF8Encoding]::new($false); \
+         [Console]::InputEncoding = $OutputEncoding; \
+         [Console]::In.ReadToEnd() | & 'C:/Users/O''Brien $work`/sidebar.exe' \
+         hook codex activity-log; exit $LASTEXITCODE"
+    );
+}
+
+#[test]
+fn claude_executable_keeps_command_shell_quoting() {
+    assert_eq!(
+        format_hook_command("C:\\Program Files\\sidebar.exe", "claude", "stop"),
+        "\"C:/Program Files/sidebar.exe\" hook claude stop"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn codex_executable_command_parses_in_powershell() {
+    let hook = format_hook_command(
+        "C:\\Program Files\\O'Brien $work`\\sidebar.exe",
+        "codex",
+        "stop",
+    );
+    let command = format!(
+        "$tokens = $null; $errors = $null; \
+         [System.Management.Automation.Language.Parser]::ParseInput(\
+         '{}', [ref]$tokens, [ref]$errors) > $null; \
+         if ($errors.Count) {{ throw ($errors | Out-String) }}",
+        hook.replace('\'', "''")
+    );
+    let output = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &command])
+        .output()
+        .expect("powershell must be available on windows");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn snippet_path_with_spaces_is_safely_quoted() {
     // Paths with spaces must survive the JSON round-trip as a quoted
     // single shell token. Before the fix, this produced

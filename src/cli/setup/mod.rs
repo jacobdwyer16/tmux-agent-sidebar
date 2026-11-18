@@ -48,10 +48,20 @@ pub(crate) fn shell_quote(s: &str) -> String {
     out
 }
 
-/// Build the `bash <hook_script> <agent> <event>` command string with
-/// proper POSIX quoting so arbitrary installation paths are safe.
+/// Build a hook command for the agent's command shell.
 fn format_hook_command(hook_script: &str, agent: &str, event: &str) -> String {
     if hook_script.ends_with(".exe") {
+        if agent == "codex" {
+            // powershell must explicitly forward the hook's utf-8 stdin.
+            return format!(
+                "$OutputEncoding = [Text.UTF8Encoding]::new($false); \
+                 [Console]::InputEncoding = $OutputEncoding; \
+                 [Console]::In.ReadToEnd() | & '{}' hook {} {}; exit $LASTEXITCODE",
+                hook_script.replace('\\', "/").replace('\'', "''"),
+                agent,
+                event
+            );
+        }
         return format!(
             "\"{}\" hook {} {}",
             hook_script.replace('\\', "/"),

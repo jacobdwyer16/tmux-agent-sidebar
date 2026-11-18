@@ -44,8 +44,15 @@ fn read_stdin_json() -> serde_json::Value {
         return serde_json::Value::Null;
     }
     let mut buf = String::new();
-    let _ = std::io::stdin().read_to_string(&mut buf);
-    serde_json::from_str(&buf).unwrap_or(serde_json::Value::Null)
+    std::io::stdin()
+        .read_to_string(&mut buf)
+        .expect("cannot read hook JSON from stdin");
+    // windows powershell can prefix native pipeline input with a utf-8 bom.
+    let input = buf.trim_start_matches('\u{feff}');
+    if input.trim().is_empty() {
+        return serde_json::Value::Null;
+    }
+    serde_json::from_str(input).expect("invalid hook JSON on stdin")
 }
 
 fn tmux_pane() -> String {
@@ -114,9 +121,50 @@ fn cmd_set_status(args: &[String]) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
     use super::*;
     use crate::adapter::json_str;
     use serde_json::json;
+
+    #[test]
+    fn hook_stdin_preserves_utf8_with_and_without_bom() {
+        if std::env::var_os("SIDEBAR_TEST_STDIN_CHILD").is_some() {
+            assert_eq!(read_stdin_json(), json!({"prompt": "caf\u{e9} \u{65e5}"}));
+            return;
+        }
+        for prefix in ["", "\u{feff}"] {
+            let payload = format!("{prefix}{{\"prompt\":\"caf\u{e9} \u{65e5}\"}}");
+            let mut child =
+                Command::new(std::env::current_exe().expect("test executable required"))
+                    .args([
+                        "--exact",
+                        "cli::tests::hook_stdin_preserves_utf8_with_and_without_bom",
+                    ])
+                    .env("SIDEBAR_TEST_STDIN_CHILD", "1")
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .expect("cannot launch stdin test child");
+            child
+                .stdin
+                .take()
+                .expect("child stdin required")
+                .write_all(payload.as_bytes())
+                .expect("cannot send hook payload");
+            let output = child
+                .wait_with_output()
+                .expect("cannot wait for stdin test");
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
 
     // ─── run() dispatch tests ─────────────────────────────────────────
 
