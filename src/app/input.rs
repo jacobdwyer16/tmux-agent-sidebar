@@ -158,11 +158,6 @@ pub(super) fn handle_key_event(
                 state.open_remove_confirm();
             }
         }
-        KeyCode::Enter => {
-            if state.focus_state.focus == Focus::Panes {
-                state.activate_selected_pane();
-            }
-        }
         KeyCode::Tab => {
             state.global.status_filter = state.global.status_filter.next();
             state.global.save_filter();
@@ -312,7 +307,7 @@ mod tests {
     }
 
     #[test]
-    fn enter_queues_activation_of_the_selected_agent_in_another_session() {
+    fn only_vim_right_queues_activation_of_the_selected_agent_in_another_session() {
         let mut state = state_with_three_panes();
         state
             .layout
@@ -322,6 +317,9 @@ mod tests {
             .pane_id = "research:@4.%7".into();
         state.global.selected_pane_row = 1;
         handle_key_event(key(KeyCode::Enter), &mut state, &AtomicBool::new(false));
+        assert!(state.focus_state.pending_activation.is_none());
+        assert!(state.focus_state.focused_pane_id.is_none());
+        handle_key_event(key(KeyCode::Char('l')), &mut state, &AtomicBool::new(false));
         let request = state
             .focus_state
             .pending_activation
