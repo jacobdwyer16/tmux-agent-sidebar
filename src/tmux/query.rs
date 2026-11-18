@@ -58,6 +58,7 @@ pub(super) mod pane_line_field {
     pub const SIDEBAR_SPAWNED: usize = 20; // absolute 26 (@agent-sidebar-spawned)
     pub const BG_CMD: usize = 21; // absolute 27 (@pane_bg_cmd)
     pub const PROJECT_DIR: usize = 23; // absolute 29 (@pane_project_dir)
+    pub const SIDEBAR_PID: usize = 24; // absolute 30 (@sidebar_pid)
     /// Minimum number of fields the pane-line suffix must contain.
     /// Equals `session_line_field::MIN_FIELDS - PANE_LINE_OFFSET`.
     pub const MIN_FIELDS: usize = 22;
@@ -98,6 +99,7 @@ fn pane_format() -> String {
         q(PANE_BG_CMD),
         q("@pane_model"),
         q(PANE_PROJECT_DIR),
+        q(super::options::SIDEBAR_PID),
     ]
     .join("|")
 }
@@ -264,7 +266,17 @@ fn parse_pane_fields_with_processes(
     }
 
     if parts[pane_line_field::PANE_ROLE] == "sidebar" {
-        return None;
+        if has_sidebar_role(parts) {
+            return None;
+        }
+        // psmux reuses pane ids while its file-backed metadata survives.
+        for key in [
+            PANE_ROLE,
+            super::options::SIDEBAR_PID,
+            super::options::SIDEBAR_CLOSE_REQUEST,
+        ] {
+            unset_pane_option(&parts[pane_line_field::PANE_ID], key);
+        }
     }
 
     let current_command = parts[pane_line_field::PANE_CURRENT_COMMAND].as_str();
@@ -474,7 +486,7 @@ fn pane_output_needs_process_snapshot(all_panes_output: &str) -> bool {
         let pane_fields = &parts[session_line_field::PANE_LINE_OFFSET..];
         if cfg!(windows)
             && pane_fields[pane_line_field::AGENT].is_empty()
-            && pane_fields[pane_line_field::PANE_ROLE] != "sidebar"
+            && !has_sidebar_role(pane_fields)
         {
             return true;
         }
@@ -485,6 +497,16 @@ fn pane_output_needs_process_snapshot(all_panes_output: &str) -> bool {
             )
         })
     })
+}
+
+fn has_sidebar_role(parts: &[String]) -> bool {
+    parts
+        .get(pane_line_field::PANE_ROLE)
+        .is_some_and(|role| role == "sidebar")
+        && (!cfg!(windows)
+            || parts.get(pane_line_field::SIDEBAR_PID).is_none_or(|owner| {
+                owner.is_empty() || parts.get(pane_line_field::PANE_PID) == Some(owner)
+            }))
 }
 
 fn apply_codex_permission_modes(
@@ -959,6 +981,78 @@ mod tests {
             parse_pane_line(&line).is_none(),
             "sidebar role should be filtered out"
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn reused_sidebar_pane_keeps_pi_metadata_and_clears_old_sidebar_markers() {
+        let _guard = test_mock::install();
+        let pane_id = "%REUSED_PI";
+        for (key, value) in [
+            (PANE_ROLE, "sidebar"),
+            (super::super::options::SIDEBAR_PID, "17508"),
+            (super::super::options::SIDEBAR_CLOSE_REQUEST, "1"),
+            (PANE_AGENT, "pi"),
+            (PANE_PROMPT, "keep my prompt"),
+        ] {
+            test_mock::set(pane_id, key, value);
+        }
+        let mut fields = field_strings(&full_fields());
+        fields.resize(pane_line_field::SIDEBAR_PID + 1, String::new());
+        for (index, value) in [
+            (pane_line_field::PANE_ROLE, "sidebar"),
+            (pane_line_field::SIDEBAR_PID, "17508"),
+            (pane_line_field::PANE_PID, "49960"),
+            (pane_line_field::PANE_ID, pane_id),
+            (pane_line_field::PANE_CURRENT_COMMAND, "node"),
+            (pane_line_field::AGENT, "pi"),
+        ] {
+            *fields.get_mut(index).expect("pane field") = value.into();
+        }
+        let pane = parse_pane_fields_with_processes(&fields, None).expect("Pi pane retained");
+        assert_eq!(pane.agent, AgentType::Pi);
+        assert!(!test_mock::contains(pane_id, PANE_ROLE));
+        assert!(!test_mock::contains(
+            pane_id,
+            super::super::options::SIDEBAR_PID
+        ));
+        assert!(!test_mock::contains(
+            pane_id,
+            super::super::options::SIDEBAR_CLOSE_REQUEST
+        ));
+        assert_eq!(test_mock::get(pane_id, PANE_AGENT), Some("pi".into()));
+        assert_eq!(
+            test_mock::get(pane_id, PANE_PROMPT),
+            Some("keep my prompt".into())
+        );
+        *fields
+            .get_mut(pane_line_field::SIDEBAR_PID)
+            .expect("sidebar owner") = "49960".into();
+        assert!(parse_pane_fields_with_processes(&fields, None).is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn reused_sidebar_without_agent_metadata_requests_process_detection() {
+        let mut fields =
+            vec![
+                String::new();
+                session_line_field::PANE_LINE_OFFSET + pane_line_field::SIDEBAR_PID + 1
+            ];
+        for (index, value) in [
+            (pane_line_field::PANE_ROLE, "sidebar"),
+            (pane_line_field::SIDEBAR_PID, "17508"),
+            (pane_line_field::PANE_PID, "49960"),
+        ] {
+            *fields
+                .get_mut(session_line_field::PANE_LINE_OFFSET + index)
+                .expect("pane field") = value.into();
+        }
+        assert!(pane_output_needs_process_snapshot(&fields.join("|")));
+        *fields
+            .get_mut(session_line_field::PANE_LINE_OFFSET + pane_line_field::SIDEBAR_PID)
+            .expect("sidebar owner") = "49960".into();
+        assert!(!pane_output_needs_process_snapshot(&fields.join("|")));
     }
 
     #[test]

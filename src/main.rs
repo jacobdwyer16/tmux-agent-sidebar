@@ -71,7 +71,16 @@ fn main() -> io::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    app::run(&mut terminal, tmux_pane, &NEEDS_REFRESH)
+    let result = app::run(&mut terminal, tmux_pane.clone(), &NEEDS_REFRESH);
+    #[cfg(windows)]
+    for key in [
+        tmux::PANE_ROLE,
+        tmux::SIDEBAR_PID,
+        tmux::SIDEBAR_CLOSE_REQUEST,
+    ] {
+        tmux::unset_pane_option(&tmux_pane, key);
+    }
+    result
 }
 
 #[cfg(unix)]
