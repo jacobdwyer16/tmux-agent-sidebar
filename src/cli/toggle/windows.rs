@@ -2,6 +2,177 @@ use crate::tmux;
 
 use super::SidebarPosition;
 
+pub(crate) fn maintain_sidebar_width(pane: &str) -> Result<(), String> {
+    let geometry = tmux::run_tmux_capture(&[
+        "display-message",
+        "-t",
+        pane,
+        "-p",
+        "#{window_id}|#{window_layout}|#{pane_width}|#{window_width}|#{window_zoomed_flag}|#{@sidebar_width}|#{pane_left}",
+    ])?;
+    let fields: Vec<&str> = geometry.split('|').collect();
+    let [
+        window,
+        layout,
+        pane_width,
+        window_width,
+        zoomed,
+        setting,
+        left,
+    ] = fields.as_slice()
+    else {
+        return Err("invalid sidebar geometry".into());
+    };
+    if *zoomed == "1" {
+        return Ok(());
+    }
+    let current = pane_width
+        .parse::<u32>()
+        .map_err(|error| format!("invalid pane width: {error}"))?;
+    let total = window_width
+        .parse::<u32>()
+        .map_err(|error| format!("invalid window width: {error}"))?;
+    let target = configured_width(setting, total)?;
+    // psmux stores split sizes as integer percentages, losing up to one percent.
+    if current.abs_diff(target) <= total.div_ceil(100) || current == total {
+        return Ok(());
+    }
+    let position = if *left == "0" {
+        SidebarPosition::Left
+    } else {
+        SidebarPosition::Right
+    };
+    let restored = restore_sidebar_width(layout, target, position, pane)?;
+    tmux::run_tmux_capture(&["select-layout", "-t", window, &restored]).map(|_| ())
+}
+
+fn configured_width(setting: &str, window_width: u32) -> Result<u32, String> {
+    let setting = if setting.is_empty() { "30" } else { setting };
+    let (number, percentage) = match setting.strip_suffix('%') {
+        Some(number) => (number, true),
+        None => (setting, false),
+    };
+    let value = number
+        .parse::<u32>()
+        .map_err(|error| format!("invalid configured width: {error}"))?;
+    let width = if percentage {
+        window_width
+            .checked_mul(value)
+            .ok_or("sidebar percentage overflow")?
+            / 100
+    } else {
+        value
+    }
+    .max(1);
+    if window_width
+        .checked_sub(width)
+        .is_none_or(|remaining| remaining <= 2)
+    {
+        return Err(format!(
+            "sidebar width {width} does not fit window width {window_width}"
+        ));
+    }
+    Ok(width)
+}
+
+fn restore_sidebar_width(
+    layout: &str,
+    width: u32,
+    position: SidebarPosition,
+    pane: &str,
+) -> Result<String, String> {
+    let (_, body) = layout.split_once(',').ok_or("missing layout checksum")?;
+    let (root, children) = body
+        .split_once('{')
+        .ok_or("sidebar has no outer horizontal split")?;
+    if root.contains('[') {
+        return Err("sidebar is nested inside a vertical split".into());
+    }
+    let children = children.strip_suffix('}').ok_or("unclosed sidebar split")?;
+    let first_end = layout_cell_length(children)?;
+    let (first, rest) = children.split_at(first_end);
+    let second = rest
+        .strip_prefix(',')
+        .ok_or("sidebar split has no second child")?;
+    if layout_cell_length(second)? != second.len() {
+        return Err("sidebar split has more than two children".into());
+    }
+    let (dimensions, _) = root.split_once(',').ok_or("missing window dimensions")?;
+    let (total, _) = dimensions
+        .split_once('x')
+        .ok_or("invalid window dimensions")?;
+    let total = total
+        .parse::<u32>()
+        .map_err(|error| format!("invalid layout width: {error}"))?;
+    let main_width = total
+        .checked_sub(width)
+        .and_then(|remaining| remaining.checked_sub(1))
+        .filter(|remaining| *remaining >= 2)
+        .ok_or("sidebar does not fit layout")?;
+    let (sidebar, main) = match position {
+        SidebarPosition::Left => (first, second),
+        SidebarPosition::Right => (second, first),
+    };
+    if sidebar.contains(['{', '[']) {
+        return Err("sidebar is not an outer leaf".into());
+    }
+    let (_, sidebar_id) = sidebar.rsplit_once(',').ok_or("missing sidebar pane id")?;
+    let (_, pane_id) = pane.rsplit_once('%').ok_or("invalid sidebar pane target")?;
+    if sidebar_id != pane_id {
+        return Err("outer layout leaf does not match sidebar pane".into());
+    }
+    let sidebar = resize_cell_width(sidebar, width)?;
+    let main = resize_cell_width(main, main_width)?;
+    let children = match position {
+        SidebarPosition::Left => format!("{sidebar},{main}"),
+        SidebarPosition::Right => format!("{main},{sidebar}"),
+    };
+    Ok(checksummed_layout(&format!("{root}{{{children}}}")))
+}
+
+fn resize_cell_width(cell: &str, width: u32) -> Result<String, String> {
+    let (dimensions, rest) = cell.split_once(',').ok_or("missing cell dimensions")?;
+    let (_, height) = dimensions
+        .split_once('x')
+        .ok_or("invalid cell dimensions")?;
+    Ok(format!("{width}x{height},{rest}"))
+}
+
+fn layout_cell_length(cell: &str) -> Result<usize, String> {
+    let mut depth = 0_u32;
+    let mut commas = 0;
+    for (index, character) in cell.char_indices() {
+        match character {
+            '{' | '[' => depth += 1,
+            '}' | ']' => {
+                depth = depth.checked_sub(1).ok_or("unexpected layout delimiter")?;
+                if depth == 0 {
+                    return Ok(index + 1);
+                }
+            }
+            ',' if depth == 0 => {
+                commas += 1;
+                if commas == 4 {
+                    return Ok(index);
+                }
+            }
+            _ => {}
+        }
+    }
+    if depth == 0 && commas == 3 {
+        Ok(cell.len())
+    } else {
+        Err("incomplete layout cell".into())
+    }
+}
+
+fn checksummed_layout(body: &str) -> String {
+    let checksum = body.bytes().fold(0_u16, |sum, byte| {
+        sum.rotate_right(1).wrapping_add(u16::from(byte))
+    });
+    format!("{checksum:04x},{body}")
+}
+
 pub(super) fn create_sidebar(
     window: &str,
     width: &str,
@@ -99,15 +270,62 @@ fn sidebar_layout(
         SidebarPosition::Right => format!("{main},{sidebar}"),
     };
     let body = format!("{width}x{height},0,0{{{children}}}");
-    let checksum = body.bytes().fold(0_u16, |sum, byte| {
-        sum.rotate_right(1).wrapping_add(u16::from(byte))
-    });
-    Ok(format!("{checksum:04x},{body}"))
+    Ok(checksummed_layout(&body))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn configured_width_supports_columns_and_percentages() {
+        assert_eq!(configured_width("42", 187), Ok(42));
+        assert_eq!(configured_width("15%", 187), Ok(28));
+        assert_eq!(configured_width("", 187), Ok(30));
+        for setting in ["wide", "100%", "200", "4294967295%"] {
+            assert!(configured_width(setting, 187).is_err());
+        }
+    }
+
+    #[test]
+    fn closing_a_main_pane_restores_the_left_sidebar_without_reordering_panes() {
+        let restored = restore_sidebar_width(
+            "0000,187x40,0,0{93x40,0,0,4,93x40,94,0,1}",
+            42,
+            SidebarPosition::Left,
+            "scratch:@1.%4",
+        )
+        .expect("restorable outer split");
+        assert_eq!(
+            restored.split_once(',').expect("checksum").1,
+            "187x40,0,0{42x40,0,0,4,144x40,94,0,1}"
+        );
+    }
+
+    #[test]
+    fn width_restore_keeps_nested_main_pane_proportions_and_right_sidebar() {
+        let restored = restore_sidebar_width(
+            "0000,187x40,0,0{93x40,0,0[93x10,0,0,1,93x29,0,11{30x29,0,11,2,62x29,31,11,3}],93x40,94,0,4}",
+            42, SidebarPosition::Right, "scratch:@1.%4",
+        ).expect("restorable nested layout");
+        assert_eq!(
+            restored.split_once(',').expect("checksum").1,
+            "187x40,0,0{144x40,0,0[93x10,0,0,1,93x29,0,11{30x29,0,11,2,62x29,31,11,3}],42x40,94,0,4}"
+        );
+    }
+
+    #[test]
+    fn width_restore_rejects_unsupported_layouts_and_wrong_sidebar_ids() {
+        for layout in [
+            "",
+            "0000,187x40,0,0,4",
+            "0000,187x40,0,0{93x40,0,0,5,93x40,94,0,1}",
+            "0000,187x40,0,0{60x40,0,0,4,60x40,61,0,1,65x40,122,0,2}",
+            "0000,187x40,0,0{93x40,0,0[93x20,0,0,4,93x19,0,21,3],93x40,94,0,1}",
+        ] {
+            assert!(restore_sidebar_width(layout, 42, SidebarPosition::Left, "%4").is_err());
+        }
+    }
 
     #[test]
     fn left_sidebar_keeps_nested_main_tree() {

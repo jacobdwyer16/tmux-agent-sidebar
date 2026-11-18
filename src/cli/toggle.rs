@@ -4,6 +4,8 @@ use crate::tmux;
 
 #[cfg(windows)]
 mod windows;
+#[cfg(windows)]
+pub(crate) use windows::maintain_sidebar_width;
 
 pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
     let mut create_only = false;

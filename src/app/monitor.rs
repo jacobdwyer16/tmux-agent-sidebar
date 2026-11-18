@@ -28,6 +28,10 @@ pub(super) struct Snapshot {
 
 impl Snapshot {
     fn collect(state: &mut AppState, request: Request) -> Self {
+        #[cfg(windows)]
+        if let Err(error) = crate::cli::toggle::maintain_sidebar_width(&state.tmux_pane) {
+            state.set_flash(format!("Sidebar width: {error}"));
+        }
         let window_active = state.refresh();
         Self {
             generation: request.focus_generation,

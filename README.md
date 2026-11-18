@@ -133,6 +133,8 @@ The installed executable is `bin/tmux-agent-sidebar.exe`.
   scratchpad visits continue to update its live working-directory metadata.
 - Navigation redraws immediately while monitoring and tmux commands run on
   background workers. Windows path aliases share one project group.
+- The Windows sidebar restores its configured width after pane closures and
+  layout changes, while leaving pane zoom active until you unzoom.
 - The bottom Git/Activity panel is hidden in the local Windows configuration.
 - Inside the sidebar, `j`/`k` select agents, `l` opens the selected agent,
   without adding a sidebar or changing its window layout. `h` returns to the
