@@ -123,6 +123,8 @@ This local checkout includes a Windows port for the psmux and WezTerm setup.
 The installed executable is `bin/tmux-agent-sidebar.exe`.
 
 - `prefix + e` toggles the sidebar in the current window.
+- The sidebar opens on the left at full window height. Set `@sidebar_position`
+  to `right` for right placement; existing terminal splits retain their order.
 - Windows close requests stop the sidebar's refresh loop before its pane exits,
   preventing transient deleted-pane errors when closing a focused sidebar.
 - `prefix + E` toggles sidebars across windows.

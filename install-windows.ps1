@@ -35,7 +35,7 @@ $configuration = Join-Path $PSScriptRoot 'windows-sidebar.conf'
 $launcher = (Join-Path $PSScriptRoot 'windows-sidebar.ps1').Replace('\', '/')
 $lines = @(
     'set -g @sidebar_width 42'
-    'set -g @sidebar_position right'
+    'set -g @sidebar_position left'
     'set -g @sidebar_bottom_height 0'
     'set -g @sidebar_filter all'
     'set -g @sidebar_repo_filter all'

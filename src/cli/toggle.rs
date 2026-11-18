@@ -2,6 +2,9 @@ use std::collections::HashSet;
 
 use crate::tmux;
 
+#[cfg(windows)]
+mod windows;
+
 pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
     let mut create_only = false;
     let mut positional = Vec::new();
@@ -96,8 +99,10 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
     ])
     .unwrap_or_default();
 
+    #[cfg(not(windows))]
     let target_pane = target_pane_for_position(&pane_geometry_output, sidebar_position)
         .unwrap_or_else(|| window_id.to_string());
+    #[cfg(not(windows))]
     let split_flags = split_window_flags(sidebar_position);
 
     // Remember active pane
@@ -110,6 +115,22 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
         .unwrap_or_else(|| "tmux-agent-sidebar".to_string());
 
     // Create sidebar pane
+    #[cfg(windows)]
+    let sidebar_pane = match windows::create_sidebar(
+        window_id,
+        &sidebar_width,
+        sidebar_position,
+        &pane_geometry_output,
+        pane_path,
+        &self_bin,
+    ) {
+        Ok(pane) => pane,
+        Err(error) => {
+            eprintln!("cannot create psmux sidebar: {error}");
+            return 1;
+        }
+    };
+    #[cfg(not(windows))]
     let sidebar_pane = tmux::run_tmux(&[
         "split-window",
         split_flags,
@@ -249,6 +270,7 @@ impl SidebarPosition {
 /// Horizontal placement of one pane, parsed from a
 /// `#{pane_left} #{pane_width} #{pane_id}` formatted `list-panes` line.
 #[derive(Debug, Eq, PartialEq)]
+#[cfg(any(not(windows), test))]
 struct PaneGeometry {
     left: u32,
     width: u32,
@@ -257,6 +279,7 @@ struct PaneGeometry {
 
 /// Parse a single `list-panes` output line into a [`PaneGeometry`].
 /// Returns `None` for malformed lines so callers can simply skip them.
+#[cfg(any(not(windows), test))]
 fn parse_pane_geometry(line: &str) -> Option<PaneGeometry> {
     let mut parts = line.split_whitespace();
     let left = parts.next()?.parse().ok()?;
@@ -273,6 +296,7 @@ fn parse_pane_geometry(line: &str) -> Option<PaneGeometry> {
 /// sidebar, or the pane with the largest right edge (`left + width`) for
 /// a right sidebar, so the new pane always lands at the window's outer
 /// edge. Returns `None` when no line of `output` parses as geometry.
+#[cfg(any(not(windows), test))]
 fn target_pane_for_position(output: &str, position: SidebarPosition) -> Option<String> {
     let panes = output.lines().filter_map(parse_pane_geometry);
     match position {
@@ -285,6 +309,7 @@ fn target_pane_for_position(output: &str, position: SidebarPosition) -> Option<S
 /// `split-window` flags for each placement: `-hfb` inserts the new pane
 /// before the target (left of it), `-hf` after it (right of it). Both
 /// `f` variants span the full window height.
+#[cfg(any(not(windows), test))]
 fn split_window_flags(position: SidebarPosition) -> &'static str {
     match position {
         SidebarPosition::Left => "-hfb",
