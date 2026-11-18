@@ -131,7 +131,7 @@ pub(super) fn handle_key_event(
             } else if state.focus_state.focus == Focus::Panes
                 && let Some(pane) = &state.focus_state.focused_pane_id
             {
-                state.focus_state.request_activation(pane.clone(), false);
+                state.focus_state.request_activation(pane.clone());
             }
         }
         KeyCode::Char('l') | KeyCode::Right => {
@@ -309,6 +309,29 @@ mod tests {
         state.global.selected_pane_row = 1;
         handle_key_event(key(KeyCode::Char('l')), &mut state, &AtomicBool::new(false));
         assert_eq!(state.focus_state.focused_pane_id.as_deref(), Some("%2"));
+    }
+
+    #[test]
+    fn enter_queues_activation_of_the_selected_agent_in_another_session() {
+        let mut state = state_with_three_panes();
+        state
+            .layout
+            .pane_row_targets
+            .get_mut(1)
+            .expect("second test pane")
+            .pane_id = "research:@4.%7".into();
+        state.global.selected_pane_row = 1;
+        handle_key_event(key(KeyCode::Enter), &mut state, &AtomicBool::new(false));
+        let request = state
+            .focus_state
+            .pending_activation
+            .expect("activation queued");
+        assert_eq!(request.pane_id, "research:@4.%7");
+        assert_eq!(request.generation, 1);
+        assert_eq!(
+            state.focus_state.focused_pane_id.as_deref(),
+            Some("research:@4.%7")
+        );
     }
 
     #[test]

@@ -221,7 +221,7 @@ mod tests {
         );
         let mut ui = AppState::new("%99".into());
         ui.focus_state.focused_pane_id = Some("%new".into());
-        ui.focus_state.request_activation("%new".into(), false);
+        ui.focus_state.request_activation("%new".into());
         ui.pane_state_mut("%keep").tab_pref = Some(BottomTab::GitStatus);
         update.apply(&mut ui);
         assert_eq!(ui.focus_state.focused_pane_id.as_deref(), Some("%new"));

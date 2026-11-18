@@ -45,7 +45,7 @@ pub fn run(
         git_tab_active,
     } = workers;
     let (monitor_tx, monitor_rx) = monitor::spawn(&mut state);
-    let (action_tx, action_rx) = actions::spawn(state.tmux_pane.clone());
+    let (action_tx, action_rx) = actions::spawn();
     let mut refresh_in_flight = false;
     let mut completed_focus_generation = 0;
     let mut confirmed_focused_pane = state.focus_state.focused_pane_id.clone();

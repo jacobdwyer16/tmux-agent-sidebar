@@ -4,7 +4,6 @@ use crate::tmux;
 #[derive(Debug, Clone)]
 pub struct PaneActivation {
     pub pane_id: String,
-    pub ensure_sidebar: bool,
     pub generation: u64,
 }
 
@@ -38,14 +37,13 @@ impl FocusState {
         }
     }
 
-    pub fn request_activation(&mut self, pane_id: String, ensure_sidebar: bool) {
+    pub fn request_activation(&mut self, pane_id: String) {
         self.activation_generation = self
             .activation_generation
             .checked_add(1)
             .expect("focus generation overflow");
         self.pending_activation = Some(PaneActivation {
             pane_id,
-            ensure_sidebar,
             generation: self.activation_generation,
         });
     }
@@ -114,7 +112,7 @@ impl AppState {
             // repo header highlight move without waiting for the next
             // periodic tmux refresh.
             self.focus_state.focused_pane_id = Some(target_pane_id.clone());
-            self.focus_state.request_activation(target_pane_id, true);
+            self.focus_state.request_activation(target_pane_id);
         }
     }
 }

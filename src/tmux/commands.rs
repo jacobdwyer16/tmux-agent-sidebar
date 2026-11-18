@@ -157,23 +157,104 @@ pub fn kill_window(window_id: &str) -> Result<(), String> {
     run_tmux_capture(&["kill-window", "-t", window_id]).map(|_| ())
 }
 
-pub fn select_pane(pane_id: &str) {
-    // Find the session containing this pane and switch to it first
-    let session_id = display_message(
+pub fn select_pane(pane_id: &str) -> Result<(), String> {
+    select_pane_with(pane_id, run_tmux_capture)
+}
+
+fn select_pane_with(
+    pane_id: &str,
+    mut run: impl FnMut(&[&str]) -> Result<String, String>,
+) -> Result<(), String> {
+    let location = run(&[
+        "display-message",
+        "-t",
         pane_id,
+        "-p",
         if cfg!(windows) {
-            "#{session_name}"
+            "#{session_name}|#{window_id}"
         } else {
-            "#{session_id}"
+            "#{session_id}|#{window_id}"
         },
-    );
-    if !session_id.is_empty() {
-        let _ = run_tmux(&["switch-client", "-t", &session_id]);
+    ])?;
+    let (session_id, window_id) = location
+        .split_once('|')
+        .filter(|(session, window)| !session.is_empty() && !window.is_empty())
+        .ok_or_else(|| format!("cannot resolve session and window for pane {pane_id}"))?;
+    // selecting a pane alone does not move the attached client to its window.
+    run(&["switch-client", "-t", session_id])?;
+    run(&["select-window", "-t", window_id])?;
+    run(&["select-pane", "-t", pane_id]).map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::select_pane_with;
+
+    #[test]
+    fn pane_activation_switches_client_and_window_without_changing_layout() {
+        let mut commands = Vec::new();
+        select_pane_with("research:@4.%7", |args| {
+            commands.push(
+                args.iter()
+                    .map(|arg| (*arg).to_string())
+                    .collect::<Vec<_>>(),
+            );
+            Ok("research|research:@4".into())
+        })
+        .expect("pane activation");
+        let location_format = if cfg!(windows) {
+            "#{session_name}|#{window_id}"
+        } else {
+            "#{session_id}|#{window_id}"
+        };
+        assert_eq!(
+            commands,
+            vec![
+                vec![
+                    "display-message",
+                    "-t",
+                    "research:@4.%7",
+                    "-p",
+                    location_format
+                ],
+                vec!["switch-client", "-t", "research"],
+                vec!["select-window", "-t", "research:@4"],
+                vec!["select-pane", "-t", "research:@4.%7"],
+            ]
+        );
     }
-    // Then switch to the correct window
-    let window_id = display_message(pane_id, "#{window_id}");
-    if !window_id.is_empty() {
-        let _ = run_tmux(&["select-window", "-t", &window_id]);
+
+    #[test]
+    fn pane_activation_stops_and_reports_each_command_failure() {
+        for failed_command in 0..4 {
+            let mut calls = 0;
+            let result = select_pane_with("%7", |_| {
+                let command = calls;
+                calls += 1;
+                if command == failed_command {
+                    Err("activation failed".into())
+                } else {
+                    Ok("$1|@4".into())
+                }
+            });
+            assert_eq!(result, Err("activation failed".into()));
+            assert_eq!(calls, failed_command + 1);
+        }
     }
-    let _ = run_tmux(&["select-pane", "-t", pane_id]);
+
+    #[test]
+    fn unresolved_pane_location_does_not_switch_the_client() {
+        for location in ["", "@4", "|@4", "$1|"] {
+            let mut calls = 0;
+            let result = select_pane_with("%7", |_| {
+                calls += 1;
+                Ok(location.into())
+            });
+            assert_eq!(
+                result,
+                Err("cannot resolve session and window for pane %7".into())
+            );
+            assert_eq!(calls, 1);
+        }
+    }
 }

@@ -135,7 +135,8 @@ The installed executable is `bin/tmux-agent-sidebar.exe`.
   background workers. Windows path aliases share one project group.
 - The bottom Git/Activity panel is hidden in the local Windows configuration.
 - Inside the sidebar, `j`/`k` select agents, `l` or Enter opens the selected agent,
-  and `h` returns to the previously focused terminal. `r` opens the repo picker;
+  without adding a sidebar or changing its window layout. `h` returns to the
+  previously focused terminal. `r` opens the repo picker;
   Tab cycles status filters. Mouse targets follow the evenly spaced status icons.
 - Up/Down also visit each agent in order. Windows key-release events are ignored
   so one tap moves one row. Existing prefix + arrow pane bindings still work.
