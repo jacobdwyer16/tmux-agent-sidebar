@@ -351,9 +351,14 @@ fn parse_pane_fields_with_processes(
         Some(parts[pane_line_field::SESSION_ID].to_string())
     };
 
+    let status = PaneStatus::from_label(parts.get(pane_line_field::PANE_STATUS)?);
+    let started_at = match status {
+        PaneStatus::Idle | PaneStatus::Error => None,
+        _ => parts.get(pane_line_field::STARTED_AT)?.parse().ok(),
+    };
     Some(PaneInfo {
         pane_active: parts[pane_line_field::PANE_ACTIVE] == "1",
-        status: PaneStatus::from_label(&parts[pane_line_field::PANE_STATUS]),
+        status,
         attention: !parts[pane_line_field::PANE_ATTENTION].is_empty(),
         agent,
         path,
@@ -365,7 +370,7 @@ fn parse_pane_fields_with_processes(
         pane_id: parts[pane_line_field::PANE_ID].to_string(),
         prompt,
         prompt_is_response,
-        started_at: parts[pane_line_field::STARTED_AT].parse().ok(),
+        started_at,
         wait_reason: parts[pane_line_field::WAIT_REASON].to_string(),
         permission_mode,
         subagents: parse_subagents(&parts[pane_line_field::SUBAGENTS]),
@@ -875,6 +880,22 @@ mod tests {
 
     fn field_strings(fields: &[&str]) -> Vec<String> {
         fields.iter().map(|field| (*field).to_string()).collect()
+    }
+
+    #[test]
+    fn finished_pi_pane_ignores_a_stale_run_timestamp() {
+        let mut fields = full_fields();
+        *fields.get_mut(pane_line_field::AGENT).expect("agent field") = "pi";
+        *fields
+            .get_mut(pane_line_field::PANE_CURRENT_COMMAND)
+            .expect("command field") = "node";
+        for status in ["idle", "error"] {
+            *fields
+                .get_mut(pane_line_field::PANE_STATUS)
+                .expect("status field") = status;
+            let pane = parse_pane_line(&make_pane_line(&fields)).expect("valid Pi pane");
+            assert_eq!(pane.started_at, None);
+        }
     }
 
     #[test]

@@ -97,7 +97,13 @@ fn update_report(pane: &str, agent: &str, input: &Value) -> Result<(), String> {
     if let Some(prompt) = input.get("prompt").and_then(Value::as_str) {
         tmux::set_pane_option(pane, tmux::PANE_PROMPT, &sanitize_tmux_value(prompt));
     }
-    if status == "running" && (new_session || old_status == "idle" || old_status.is_empty()) {
+    let previous_run_finished = matches!(old_status.as_str(), "idle" | "error");
+    if matches!(status, "idle" | "error") || (status == "waiting" && previous_run_finished) {
+        tmux::unset_pane_option(pane, tmux::PANE_STARTED_AT);
+    } else if matches!(status, "running" | "background")
+        && (previous_run_finished
+            || tmux::get_pane_option_value(pane, tmux::PANE_STARTED_AT).is_empty())
+    {
         tmux::set_pane_option(pane, tmux::PANE_STARTED_AT, &now_epoch_secs().to_string());
         tmux::set_pane_option(
             pane,
@@ -219,6 +225,36 @@ mod tests {
             model_name(&json!({"model":{"id":"gemini-4","display_name":"Gemini 4 Argon"}})),
             Some("Gemini 4 Argon")
         );
+    }
+
+    #[test]
+    fn pi_run_timer_tracks_work_through_completion_and_failure() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%PI_TIMER";
+        tmux::test_mock::set(pane, tmux::PANE_STATUS, "idle");
+        for terminal in ["idle", "error"] {
+            tmux::test_mock::set(pane, tmux::PANE_STARTED_AT, "123");
+            update_report(pane, "pi", &json!({"agent_state":"waiting"})).expect("valid Pi report");
+            assert!(!tmux::test_mock::contains(pane, tmux::PANE_STARTED_AT));
+            update_report(pane, "pi", &json!({"agent_state":"working"})).expect("valid Pi report");
+            assert!(tmux::test_mock::contains(pane, tmux::PANE_STARTED_AT));
+            tmux::test_mock::set(pane, tmux::PANE_STARTED_AT, "123");
+            for report in [
+                json!({"agent_state":"waiting"}),
+                json!({"agent_state":"working"}),
+                json!({"agent_state":"idle","task_count":1}),
+            ] {
+                update_report(pane, "pi", &report).expect("valid Pi report");
+                assert_eq!(
+                    tmux::get_pane_option_value(pane, tmux::PANE_STARTED_AT),
+                    "123"
+                );
+            }
+            update_report(pane, "pi", &json!({"agent_state":terminal})).expect("valid Pi report");
+            assert!(!tmux::test_mock::contains(pane, tmux::PANE_STARTED_AT));
+        }
+        update_report(pane, "pi", &json!({"agent_state":"working"})).expect("valid Pi report");
+        assert!(tmux::test_mock::contains(pane, tmux::PANE_STARTED_AT));
     }
 
     #[test]
